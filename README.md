@@ -2,6 +2,20 @@
 
 Dashboard de supervision temps reel pour installation solaire hybride residentielle. Agregation de donnees multi-equipements (Hoymiles, Victron, Shelly) dans une interface moderne avec WebSocket et persistance PostgreSQL.
 
+## Screenshots
+
+### Light mode
+
+| Vue d'ensemble | Batteries |
+|:-:|:-:|
+| ![Overview Light](docs/screenshots/white-1.png) | ![Batteries Light](docs/screenshots/white-2.png) |
+
+### Dark mode
+
+| Vue d'ensemble | Batteries |
+|:-:|:-:|
+| ![Overview Dark](docs/screenshots/dark-1.png) | ![Batteries Dark](docs/screenshots/dark-2.png) |
+
 ## Hardware
 
 L'installation solaire supervisee par SolarPulse est composee de :
