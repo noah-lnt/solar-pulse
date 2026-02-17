@@ -38,13 +38,22 @@ services:
     restart: unless-stopped
     networks:
       - solarpulse
-      - traefik_proxy
+      - web
     labels:
       - "traefik.enable=true"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.solarpulse-http.rule=Host(`${TRAEFIK_HOST:-solarpulse.local}`)"
+      - "traefik.http.routers.solarpulse-http.entrypoints=web"
+      - "traefik.http.routers.solarpulse-http.middlewares=solarpulse-https-redirect"
+      - "traefik.http.middlewares.solarpulse-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.solarpulse-https-redirect.redirectscheme.permanent=true"
+      # HTTPS
       - "traefik.http.routers.solarpulse.rule=Host(`${TRAEFIK_HOST:-solarpulse.local}`)"
-      - "traefik.http.routers.solarpulse.entrypoints=${TRAEFIK_ENTRYPOINT:-web}"
+      - "traefik.http.routers.solarpulse.entrypoints=websecure"
+      - "traefik.http.routers.solarpulse.tls=true"
+      - "traefik.http.routers.solarpulse.tls.certresolver=letsencrypt"
       - "traefik.http.services.solarpulse.loadbalancer.server.port=80"
-      - "traefik.docker.network=traefik_proxy"
+      - "traefik.docker.network=web"
 
 volumes:
   pgdata:
@@ -52,5 +61,5 @@ volumes:
 networks:
   solarpulse:
     driver: bridge
-  traefik_proxy:
+  web:
     external: true

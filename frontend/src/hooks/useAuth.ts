@@ -19,11 +19,11 @@ export function useAuth() {
     }
   }, []);
 
-  const handleRegister = useCallback(async (email: string, password: string) => {
+  const handleRegister = useCallback(async (email: string, password: string, secret: string) => {
     setLoading(true);
     setError(null);
     try {
-      await auth.register(email, password);
+      await auth.register(email, password, secret);
       setIsLoggedIn(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur d\'inscription');

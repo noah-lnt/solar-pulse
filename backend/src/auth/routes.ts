@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { config } from '../config';
 import { hashPassword, comparePassword, generateToken } from './utils';
 import { AuthRequest } from './middleware';
 
@@ -7,7 +8,7 @@ const router = Router();
 
 router.post('/register', async (req: AuthRequest, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, secret } = req.body;
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email et mot de passe requis' });
@@ -17,6 +18,14 @@ router.post('/register', async (req: AuthRequest, res) => {
     if (password.length < 8) {
       res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caracteres' });
       return;
+    }
+
+    // Verify registration secret if configured (skip for authenticated users)
+    if (config.registerSecret && !req.user) {
+      if (!secret || secret !== config.registerSecret) {
+        res.status(403).json({ error: 'Code d\'inscription invalide' });
+        return;
+      }
     }
 
     // Allow registration only if no users exist or if authenticated

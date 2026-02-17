@@ -8,7 +8,7 @@ import { Sun } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
-  onRegister: (email: string, password: string) => Promise<void>;
+  onRegister: (email: string, password: string, secret: string) => Promise<void>;
   loading: boolean;
   error: string | null;
 }
@@ -16,12 +16,13 @@ interface LoginPageProps {
 export function LoginPage({ onLogin, onRegister, loading, error }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [secret, setSecret] = useState('');
   const [isRegister, setIsRegister] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isRegister) {
-      await onRegister(email, password);
+      await onRegister(email, password, secret);
     } else {
       await onLogin(email, password);
     }
@@ -69,6 +70,19 @@ export function LoginPage({ onLogin, onRegister, loading, error }: LoginPageProp
                 minLength={8}
               />
             </div>
+            {isRegister && (
+              <div className="space-y-2">
+                <Label htmlFor="secret">Code d'inscription</Label>
+                <Input
+                  id="secret"
+                  type="password"
+                  placeholder="Code fourni par l'administrateur"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Chargement...' : isRegister ? 'Creer le compte' : 'Se connecter'}
             </Button>

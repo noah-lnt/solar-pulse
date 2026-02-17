@@ -14,6 +14,7 @@ export const config = {
 
   // Auth
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  registerSecret: process.env.REGISTER_SECRET || '',
 
   // Shelly
   shellyIp: process.env.SHELLY_IP || '192.168.1.XX',

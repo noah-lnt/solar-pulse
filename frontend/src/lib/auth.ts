@@ -36,14 +36,14 @@ export async function login(email: string, password: string): Promise<{ id: numb
   return data.user;
 }
 
-export async function register(email: string, password: string): Promise<{ id: number; email: string }> {
+export async function register(email: string, password: string, secret: string): Promise<{ id: number; email: string }> {
   const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, secret }),
   });
 
   if (!res.ok) {

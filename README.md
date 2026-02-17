@@ -66,7 +66,7 @@ L'installation solaire supervisee par SolarPulse est composee de :
 ### Infrastructure
 
 - **Conteneurisation :** Docker Compose (3 services)
-- **Reverse proxy :** Traefik (reseau externe) + Nginx (proxy interne API/WS)
+- **Reverse proxy :** Traefik v3 (HTTPS Let's Encrypt, reseau `web`) + Nginx (proxy interne API/WS)
 - **Base de donnees :** PostgreSQL 16 Alpine avec volume persistant
 - **Builds :** Multi-stage Docker (Node builder → production slim)
 
@@ -129,7 +129,7 @@ Chaque equipement a son propre collecteur independant. Si un collecteur echoue, 
 ### Prerequis
 
 - Docker et Docker Compose
-- Reseau Traefik (`traefik_proxy`) existant
+- Reseau Traefik (`web`) existant avec HTTPS (Let's Encrypt)
 
 ### Mise en place
 
@@ -142,10 +142,10 @@ cp .env.example .env
 # Editer .env avec vos IPs et credentials
 
 # Creer le reseau Traefik si necessaire
-docker network create traefik_proxy
+docker network create web
 
 # Lancer
-docker compose up -d
+docker compose up -d --build
 ```
 
 ### Configuration
