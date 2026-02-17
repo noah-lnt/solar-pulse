@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-solarpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solarpulse_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-solarpulse}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - solarpulse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-solarpulse}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - solarpulse
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - solarpulse
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.solarpulse.rule=Host(`${TRAEFIK_HOST:-solarpulse.local}`)"
+      - "traefik.http.routers.solarpulse.entrypoints=${TRAEFIK_ENTRYPOINT:-web}"
+      - "traefik.http.services.solarpulse.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik_proxy"
+
+volumes:
+  pgdata:
+
+networks:
+  solarpulse:
+    driver: bridge
+  traefik_proxy:
+    external: true

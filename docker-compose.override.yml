@@ -1,0 +1,7 @@
+## Override pour le dev local
+## Expose PostgreSQL sur localhost:5432
+## Usage: docker compose up -d postgres
+services:
+  postgres:
+    ports:
+      - "5432:5432"
