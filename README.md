@@ -4,17 +4,13 @@ Dashboard de supervision temps reel pour installation solaire hybride residentie
 
 ## Screenshots
 
-### Light mode
-
-| Vue d'ensemble | Batteries |
-|:-:|:-:|
-| ![Overview Light](docs/screenshots/white-1.png) | ![Batteries Light](docs/screenshots/white-2.png) |
-
 ### Dark mode
 
-| Vue d'ensemble | Batteries |
-|:-:|:-:|
-| ![Overview Dark](docs/screenshots/dark-1.png) | ![Batteries Dark](docs/screenshots/dark-2.png) |
+![Overview Dark](docs/screenshots/dark-1.png)
+
+### Light mode
+
+![Batteries Light](docs/screenshots/white-2.png)
 
 ## Hardware
 
