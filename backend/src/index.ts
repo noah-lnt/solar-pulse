@@ -41,7 +41,7 @@ async function main() {
   setupWebSocket(server);
 
   // Start polling
-  const POLL_INTERVAL = 2000;
+  const POLL_INTERVAL = 10000;
   setInterval(async () => {
     try {
       const state = await aggregate();

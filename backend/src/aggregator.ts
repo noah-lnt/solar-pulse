@@ -39,6 +39,15 @@ const defaultLifepo: LiFePO4DiyData = {
 // Cache des dernieres valeurs connues pour chaque collecteur
 const lastKnown: Record<string, unknown> = {};
 
+// Throttling par collecteur (intervalle en ms)
+const HOYMILES_INTERVAL = 120_000; // 120s
+const MS2A_INTERVAL = 30_000;      // 30s
+
+let lastHoymilesCollect = 0;
+let lastMs2aCollect = 0;
+let cachedPv: HoymilesData | null = null;
+let cachedMs2a: BatteryData | null = null;
+
 async function safeCollect<T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     const result = await fn();
@@ -122,9 +131,24 @@ async function saveHistoryPoint(point: HistoryPoint): Promise<void> {
 // ── Aggregation ──
 
 export async function aggregate(): Promise<SystemState> {
-  const pv = await safeCollect('Hoymiles', () => collectHoymiles(), defaultPv);
+  const now = Date.now();
+
+  // Hoymiles: collecter toutes les 120s
+  if (now - lastHoymilesCollect >= HOYMILES_INTERVAL || !cachedPv) {
+    cachedPv = await safeCollect('Hoymiles', () => collectHoymiles(), defaultPv);
+    lastHoymilesCollect = now;
+  }
+  const pv = cachedPv;
+
   const grid = await safeCollect('Shelly', () => collectShelly(pv.powerNow), defaultGrid);
-  const ms2a = await safeCollect('MS-2A', () => collectMS2A(pv.powerNow, grid.totalPower), defaultMs2a);
+
+  // MS-2A: collecter toutes les 30s
+  if (now - lastMs2aCollect >= MS2A_INTERVAL || !cachedMs2a) {
+    cachedMs2a = await safeCollect('MS-2A', () => collectMS2A(pv.powerNow, grid.totalPower), defaultMs2a);
+    lastMs2aCollect = now;
+  }
+  const ms2a = cachedMs2a;
+
   const victron = await safeCollect('Victron', () => collectVictron(pv.powerNow, grid.totalPower), defaultVictron);
   const lifepoDiy = await safeCollect('LiFePO4', () => collectLiFePO4(victron.mode, victron.outputPower), defaultLifepo);
 
@@ -164,8 +188,8 @@ export async function aggregate(): Promise<SystemState> {
 
   currentState = state;
 
-  const now = new Date();
-  const currentMinute = now.getHours() * 60 + now.getMinutes();
+  const nowDate = new Date();
+  const currentMinute = nowDate.getHours() * 60 + nowDate.getMinutes();
   if (currentMinute !== lastHistoryMinute) {
     lastHistoryMinute = currentMinute;
     const point: HistoryPoint = {
