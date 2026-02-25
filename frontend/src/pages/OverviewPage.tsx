@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Sun, Battery, Zap, Power, PowerOff } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Sun, Battery, Zap, Power, PowerOff, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PVProductionChart } from '@/components/panels/PVProductionChart';
@@ -55,8 +55,59 @@ function BatteryCard({ title, soc, power, status, color }: {
   );
 }
 
+function computeDailyEnergy(history: HistoryPoint[]) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+
+  const todayPoints = history.filter(p => new Date(p.timestamp).getTime() >= todayMs);
+  if (todayPoints.length < 2) return null;
+
+  const first = todayPoints[0];
+  const last = todayPoints[todayPoints.length - 1];
+
+  const dailyExportKwh = Math.max(0, (last.gridExportWh - first.gridExportWh) / 1000);
+  const dailyImportKwh = Math.max(0, (last.gridImportWh - first.gridImportWh) / 1000);
+
+  // Charge/decharge batterie : integration des puissances minute par minute
+  // Convention SolarPulse : negatif = charge, positif = decharge
+  let chargeWh = 0;
+  let dischargeWh = 0;
+  // LiFePO4 via Victron passe par le Shelly → il faut le soustraire des compteurs Shelly
+  let lifepoChargeWh = 0;
+  let lifepoDischargeWh = 0;
+  for (const p of todayPoints) {
+    const ms2a = p.ms2aPower ?? 0;
+    const lifepo = p.lifepePower ?? 0;
+    const totalBatPower = ms2a + lifepo;
+    if (totalBatPower < 0) {
+      chargeWh += Math.abs(totalBatPower) / 60; // W * (1min / 60) = Wh
+    } else if (totalBatPower > 0) {
+      dischargeWh += totalBatPower / 60;
+    }
+    // Tracker LiFePO4 separement (transite par Shelly via Victron)
+    if (lifepo < 0) lifepoChargeWh += Math.abs(lifepo) / 60;
+    else if (lifepo > 0) lifepoDischargeWh += lifepo / 60;
+  }
+
+  // Corriger les compteurs Shelly : retirer les flux Victron/LiFePO4
+  // Charge LiFePO4 = Shelly voit "export" mais c'est de la charge batterie
+  // Decharge LiFePO4 = Shelly voit "import" mais c'est de la decharge batterie
+  const realExportKwh = Math.max(0, dailyExportKwh - lifepoChargeWh / 1000);
+  const realImportKwh = Math.max(0, dailyImportKwh - lifepoDischargeWh / 1000);
+
+  return {
+    dailyExportKwh: realExportKwh,
+    dailyImportKwh: realImportKwh,
+    dailyChargeKwh: Math.round(chargeWh / 10) / 100,
+    dailyDischargeKwh: Math.round(dischargeWh / 10) / 100,
+  };
+}
+
 export function OverviewPage({ state, history }: OverviewPageProps) {
   const [victronLoading, setVictronLoading] = useState(false);
+
+  const dailyEnergy = useMemo(() => computeDailyEnergy(history), [history]);
 
   if (!state) {
     return (
@@ -148,6 +199,30 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Autoconsommation journaliere */}
+      {state.pv.todayYield > 0 && dailyEnergy && (
+        <Card className="border-border bg-card/50">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-400" />
+                <span className="text-sm font-medium">Autoconsommation</span>
+                <span className="text-xl font-bold text-emerald-400">
+                  {Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)))}%
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <span>PV: {state.pv.todayYield.toFixed(1)} kWh</span>
+                <span>Charge: {dailyEnergy.dailyChargeKwh.toFixed(1)} kWh</span>
+                <span>Decharge: {dailyEnergy.dailyDischargeKwh.toFixed(1)} kWh</span>
+                <span>Export: {dailyEnergy.dailyExportKwh.toFixed(1)} kWh</span>
+                <span>Import: {dailyEnergy.dailyImportKwh.toFixed(1)} kWh</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <PVProductionChart history={history} />
     </div>

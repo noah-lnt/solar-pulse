@@ -51,6 +51,9 @@ const TOKEN_TTL_MS = 3 * 60 * 1000; // Renouveler le token toutes les 3 minutes
 // Cache SD URIs per station ID (with TTL)
 const sdUriCache: Record<string, { uri: string; timestamp: number }> = {};
 const SD_URI_TTL_MS = 2 * 60 * 1000; // SD URI expire toutes les 2 minutes
+// Cache daily yield (pas besoin de refresh toutes les 2s)
+let cachedDailyYield: { value: number; date: string; timestamp: number } | null = null;
+const DAILY_YIELD_TTL_MS = 60 * 1000; // Refresh toutes les 60 secondes
 
 // ── Auth ──
 
@@ -196,6 +199,31 @@ async function getStationData(sdUri: string): Promise<Record<string, unknown>> {
   return data ?? {};
 }
 
+// ── Daily yield (endpoint precis) ──
+
+async function getDailyYield(stationId: string): Promise<number> {
+  const now = Date.now();
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  if (cachedDailyYield && cachedDailyYield.date === today && (now - cachedDailyYield.timestamp) < DAILY_YIELD_TTL_MS) {
+    return cachedDailyYield.value;
+  }
+
+  const json = await authenticatedPost(
+    `${HOYMILES_API_BASE}/pvm-data/api/0/station/data3/ceqc_a`,
+    { sid: Number(stationId), date: today, mode: 1 },
+  );
+
+  const data = json.data as Record<string, unknown> | undefined;
+  const pvEq = parseFloat(String(data?.pv_eq ?? '0'));
+  const yieldKwh = Math.round(pvEq / 10) / 100; // Wh → kWh avec 2 decimales
+
+  cachedDailyYield = { value: yieldKwh, date: today, timestamp: now };
+  console.log(`[Hoymiles PV] Daily yield from API: ${yieldKwh} kWh (pv_eq=${pvEq} Wh)`);
+
+  return yieldKwh;
+}
+
 // ── Shared cache for MS-2A station data ──
 // All panels go through the MS-2A, so pv2 from MS-2A station is the real-time PV power.
 // The classic PV station has a ~5 min sync delay, so we prefer MS-2A data.
@@ -236,9 +264,8 @@ async function collectRealHoymiles(): Promise<HoymilesData> {
     pvPower = power?.pv ?? 0;
     totalYield = power?.pvr ?? 0; // Cumul total en kWh
 
-    // dly = production journaliere en Wh
-    const dlyWh = typeof data.dly === 'number' ? data.dly : 0;
-    pvYield = Math.round(dlyWh / 10) / 100; // Wh → kWh avec 2 decimales
+    // Daily yield via endpoint dedie (dly du real-time est faux)
+    pvYield = await getDailyYield(config.hoymilesStationId);
   }
 
   pvStatus = { ...pvStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0, lastError: null };
