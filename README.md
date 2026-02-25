@@ -192,16 +192,37 @@ Le backend generera des donnees realistes avec courbe solaire sinusoidale, simul
 
 ## Developpement
 
+### Avec Docker (recommande)
+
+Le fichier `docker-compose.dev.yml` expose PostgreSQL sur `localhost:5432` pour le dev local.
+
 ```bash
-# Backend
+# 1. Lancer PostgreSQL en dev
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+
+# 2. Configurer l'environnement
+cp .env.example .env
+# Editer .env (DATABASE_URL=postgresql://solarpulse:solarpulse_secret@localhost:5432/solarpulse)
+
+# 3. Lancer le backend
 cd backend
 npm install
 npm run dev
 
-# Frontend (dans un autre terminal)
+# 4. Lancer le frontend (dans un autre terminal)
 cd frontend
 npm install
 npm run dev
+```
+
+### Sans Docker
+
+```bash
+# Prerequis : PostgreSQL installe localement
+# Creer la base et l'utilisateur, puis configurer DATABASE_URL dans .env
+
+cd backend && npm install && npm run dev
+cd frontend && npm install && npm run dev  # autre terminal
 ```
 
 Le frontend Vite proxifie automatiquement `/api/*` et `/ws` vers le backend local (port 3001).
