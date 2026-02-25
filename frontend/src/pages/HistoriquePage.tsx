@@ -27,10 +27,9 @@ function computeRates(d: DailySummary) {
   const autoconso = d.pvYieldKwh < 0.01 ? 0
     : d.gridExportKwh < 0.01 ? 100
     : Math.min(100, Math.max(0, Math.round((d.pvYieldKwh - d.gridExportKwh) / d.pvYieldKwh * 100)));
-  const autosuff = d.gridImportKwh < 0.01 ? 100 : (() => {
-    const conso = d.pvYieldKwh + d.dischargeKwh - d.chargeKwh + d.gridImportKwh - d.gridExportKwh;
-    return conso > 0 ? Math.min(100, Math.max(0, Math.round((conso - d.gridImportKwh) / conso * 100))) : 0;
-  })();
+  const local = (d.pvYieldKwh - d.chargeKwh) + d.dischargeKwh;
+  const autosuff = d.gridImportKwh < 0.01 ? (local > 0 ? 100 : 0)
+    : Math.min(100, Math.max(0, Math.round(local / (local + d.gridImportKwh) * 100)));
   return { autoconso, autosuff };
 }
 
