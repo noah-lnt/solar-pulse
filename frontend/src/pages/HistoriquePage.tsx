@@ -23,6 +23,17 @@ function Cell({ value, unit = 'kWh' }: { value: number; unit?: string }) {
   );
 }
 
+function computeRates(d: DailySummary) {
+  const autoconso = d.pvYieldKwh < 0.01 ? 0
+    : d.gridExportKwh < 0.01 ? 100
+    : Math.min(100, Math.max(0, Math.round((d.pvYieldKwh - d.gridExportKwh) / d.pvYieldKwh * 100)));
+  const autosuff = d.gridImportKwh < 0.01 ? 100 : (() => {
+    const conso = d.pvYieldKwh + d.dischargeKwh - d.chargeKwh + d.gridImportKwh - d.gridExportKwh;
+    return conso > 0 ? Math.min(100, Math.max(0, Math.round((conso - d.gridImportKwh) / conso * 100))) : 0;
+  })();
+  return { autoconso, autosuff };
+}
+
 export function HistoriquePage() {
   const [period, setPeriod] = useState<string>('7d');
   const [data, setData] = useState<{ days: DailySummary[]; averages: DailySummary } | null>(null);
@@ -91,29 +102,43 @@ export function HistoriquePage() {
                     <th className="px-3 py-2 text-right font-medium">Decharge</th>
                     <th className="px-3 py-2 text-right font-medium">Import</th>
                     <th className="px-3 py-2 text-right font-medium">Export</th>
+                    <th className="px-3 py-2 text-right font-medium">Autoconso.</th>
+                    <th className="px-3 py-2 text-right font-medium">Autosuff.</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.days.map((day) => (
-                    <tr key={day.date} className="border-b border-border/50 hover:bg-muted/30">
-                      <td className="px-3 py-2 font-medium">{formatDate(day.date)}</td>
-                      <Cell value={day.pvYieldKwh} />
-                      <Cell value={day.chargeKwh} />
-                      <Cell value={day.dischargeKwh} />
-                      <Cell value={day.gridImportKwh} />
-                      <Cell value={day.gridExportKwh} />
-                    </tr>
-                  ))}
+                  {data.days.map((day) => {
+                    const { autoconso, autosuff } = computeRates(day);
+                    return (
+                      <tr key={day.date} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="px-3 py-2 font-medium">{formatDate(day.date)}</td>
+                        <Cell value={day.pvYieldKwh} />
+                        <Cell value={day.chargeKwh} />
+                        <Cell value={day.dischargeKwh} />
+                        <Cell value={day.gridImportKwh} />
+                        <Cell value={day.gridExportKwh} />
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{autoconso}%</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-400">{autosuff}%</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-muted/20 font-semibold">
-                    <td className="px-3 py-2">Moyenne / jour</td>
-                    <Cell value={data.averages.pvYieldKwh} />
-                    <Cell value={data.averages.chargeKwh} />
-                    <Cell value={data.averages.dischargeKwh} />
-                    <Cell value={data.averages.gridImportKwh} />
-                    <Cell value={data.averages.gridExportKwh} />
-                  </tr>
+                  {(() => {
+                    const { autoconso, autosuff } = computeRates(data.averages);
+                    return (
+                      <tr className="bg-muted/20 font-semibold">
+                        <td className="px-3 py-2">Moyenne / jour</td>
+                        <Cell value={data.averages.pvYieldKwh} />
+                        <Cell value={data.averages.chargeKwh} />
+                        <Cell value={data.averages.dischargeKwh} />
+                        <Cell value={data.averages.gridImportKwh} />
+                        <Cell value={data.averages.gridExportKwh} />
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{autoconso}%</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-400">{autosuff}%</td>
+                      </tr>
+                    );
+                  })()}
                 </tfoot>
               </table>
             </div>

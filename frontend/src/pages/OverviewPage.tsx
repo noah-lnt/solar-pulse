@@ -202,9 +202,12 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
 
       {/* Autoconsommation + Autosuffisance */}
       {state.pv.todayYield > 0 && dailyEnergy && (() => {
-        const autoConsoPct = Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)));
-        const conso = state.pv.todayYield + dailyEnergy.dailyDischargeKwh - dailyEnergy.dailyChargeKwh + dailyEnergy.dailyImportKwh - dailyEnergy.dailyExportKwh;
-        const autoSuffPct = conso > 0 ? Math.min(100, Math.max(0, Math.round((conso - dailyEnergy.dailyImportKwh) / conso * 100))) : 0;
+        const autoConsoPct = dailyEnergy.dailyExportKwh < 0.01 ? 100
+          : Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)));
+        const autoSuffPct = dailyEnergy.dailyImportKwh < 0.01 ? 100 : (() => {
+          const conso = state.pv.todayYield + dailyEnergy.dailyDischargeKwh - dailyEnergy.dailyChargeKwh + dailyEnergy.dailyImportKwh - dailyEnergy.dailyExportKwh;
+          return conso > 0 ? Math.min(100, Math.max(0, Math.round((conso - dailyEnergy.dailyImportKwh) / conso * 100))) : 0;
+        })();
         return (
           <Card className="border-border bg-card/50">
             <CardContent className="py-3">
