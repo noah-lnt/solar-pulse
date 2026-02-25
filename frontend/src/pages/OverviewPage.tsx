@@ -63,8 +63,8 @@ function computeDailyEnergy(history: HistoryPoint[]) {
   const todayPoints = history.filter(p => new Date(p.timestamp).getTime() >= todayMs);
   if (todayPoints.length < 2) return null;
 
-  const first = todayPoints[0];
-  const last = todayPoints[todayPoints.length - 1];
+  const first = todayPoints[0]!;
+  const last = todayPoints[todayPoints.length - 1]!;
 
   const dailyExportKwh = Math.max(0, (last.gridExportWh - first.gridExportWh) / 1000);
   const dailyImportKwh = Math.max(0, (last.gridImportWh - first.gridImportWh) / 1000);
