@@ -133,8 +133,12 @@ async function saveHistoryPoint(point: HistoryPoint): Promise<void> {
 export async function aggregate(): Promise<SystemState> {
   const now = Date.now();
 
-  // Hoymiles: collecter toutes les 120s
-  if (now - lastHoymilesCollect >= HOYMILES_INTERVAL || !cachedPv) {
+  // Hoymiles: collecter toutes les 120s, skip entre 22h et 4h (pas de production PV)
+  const hour = new Date().getHours();
+  const isNight = hour >= 22 || hour < 4;
+  if (isNight) {
+    cachedPv = defaultPv;
+  } else if (now - lastHoymilesCollect >= HOYMILES_INTERVAL || !cachedPv) {
     cachedPv = await safeCollect('Hoymiles', () => collectHoymiles(), defaultPv);
     lastHoymilesCollect = now;
   }
