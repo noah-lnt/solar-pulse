@@ -276,8 +276,9 @@ async function collectRealMS2A(): Promise<BatteryData> {
 
   const soc = parseFloat(String(ms2aData.soc ?? 0));
   const batRaw = power?.bat ?? 0;
-  // Hoymiles API: bat positive = discharging, negative = charging (same convention as SolarPulse)
-  const batPower = batRaw;
+  // Hoymiles API: bat positive = charging, negative = discharging (inverse de SolarPulse)
+  // SolarPulse convention: positive = discharging, negative = charging → on inverse le signe
+  const batPower = -batRaw;
   const ms2aPvPower = power?.pv2 ?? 0;    // PV power through MS-2A
   const gridPowerMs2a = power?.grid ?? 0; // Grid exchange through MS-2A
   const loadPower = power?.load ?? 0;     // Load through MS-2A
