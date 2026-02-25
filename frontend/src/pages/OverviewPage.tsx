@@ -200,29 +200,39 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
         </Card>
       </div>
 
-      {/* Autoconsommation journaliere */}
-      {state.pv.todayYield > 0 && dailyEnergy && (
-        <Card className="border-border bg-card/50">
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-emerald-400" />
-                <span className="text-sm font-medium">Autoconsommation</span>
-                <span className="text-xl font-bold text-emerald-400">
-                  {Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)))}%
-                </span>
+      {/* Autoconsommation + Autosuffisance */}
+      {state.pv.todayYield > 0 && dailyEnergy && (() => {
+        const autoConsoPct = Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)));
+        const conso = state.pv.todayYield + dailyEnergy.dailyDischargeKwh - dailyEnergy.dailyChargeKwh + dailyEnergy.dailyImportKwh - dailyEnergy.dailyExportKwh;
+        const autoSuffPct = conso > 0 ? Math.min(100, Math.max(0, Math.round((conso - dailyEnergy.dailyImportKwh) / conso * 100))) : 0;
+        return (
+          <Card className="border-border bg-card/50">
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-emerald-400" />
+                    <span className="text-sm font-medium">Autoconso.</span>
+                    <span className="text-xl font-bold text-emerald-400">{autoConsoPct}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-400" />
+                    <span className="text-sm font-medium">Autosuffisance</span>
+                    <span className="text-xl font-bold text-amber-400">{autoSuffPct}%</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  <span>PV: {state.pv.todayYield.toFixed(1)} kWh</span>
+                  <span>Charge: {dailyEnergy.dailyChargeKwh.toFixed(1)} kWh</span>
+                  <span>Decharge: {dailyEnergy.dailyDischargeKwh.toFixed(1)} kWh</span>
+                  <span>Export: {dailyEnergy.dailyExportKwh.toFixed(1)} kWh</span>
+                  <span>Import: {dailyEnergy.dailyImportKwh.toFixed(1)} kWh</span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                <span>PV: {state.pv.todayYield.toFixed(1)} kWh</span>
-                <span>Charge: {dailyEnergy.dailyChargeKwh.toFixed(1)} kWh</span>
-                <span>Decharge: {dailyEnergy.dailyDischargeKwh.toFixed(1)} kWh</span>
-                <span>Export: {dailyEnergy.dailyExportKwh.toFixed(1)} kWh</span>
-                <span>Import: {dailyEnergy.dailyImportKwh.toFixed(1)} kWh</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <PVProductionChart history={history} />
     </div>
