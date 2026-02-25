@@ -8,6 +8,7 @@ import { authRoutes } from './auth/routes';
 import { statusRoutes } from './routes/status';
 import { healthRoutes } from './routes/health';
 import { historyRoutes } from './routes/history';
+import { dailyRoutes } from './routes/daily';
 import { victronRoutes } from './routes/victron';
 import { setupWebSocket, broadcast } from './websocket';
 import { aggregate, loadHistory } from './aggregator';
@@ -33,6 +34,7 @@ async function main() {
   app.use('/api/status', statusRoutes);
   app.use('/api/health', healthRoutes);
   app.use('/api/history', historyRoutes);
+  app.use('/api/history', dailyRoutes);
   app.use('/api/victron', victronRoutes);
 
   // WebSocket

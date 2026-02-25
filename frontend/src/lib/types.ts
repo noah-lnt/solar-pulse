@@ -104,3 +104,17 @@ export interface HistoryPoint {
   // Victron
   victronMode: string;
 }
+
+export interface DailySummary {
+  date: string;
+  pvYieldKwh: number;
+  gridImportKwh: number;
+  gridExportKwh: number;
+  chargeKwh: number;
+  dischargeKwh: number;
+}
+
+export interface DailyHistoryResponse {
+  days: DailySummary[];
+  averages: DailySummary;
+}

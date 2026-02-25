@@ -8,6 +8,7 @@ import { OverviewPage } from '@/pages/OverviewPage';
 import { BatteriesPage } from '@/pages/BatteriesPage';
 import { GridPage } from '@/pages/GridPage';
 import { PanelsPage } from '@/pages/PanelsPage';
+import { HistoriquePage } from '@/pages/HistoriquePage';
 
 interface DashboardShellProps {
   onLogout: () => void;
@@ -29,6 +30,7 @@ export function DashboardShell({ onLogout }: DashboardShellProps) {
             <TabsTrigger value="batteries">Batteries</TabsTrigger>
             <TabsTrigger value="grid">Reseau</TabsTrigger>
             <TabsTrigger value="panels">Panneaux</TabsTrigger>
+            <TabsTrigger value="historique">Historique</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
             <OverviewPage state={state} history={history} />
@@ -41,6 +43,9 @@ export function DashboardShell({ onLogout }: DashboardShellProps) {
           </TabsContent>
           <TabsContent value="panels">
             <PanelsPage state={state} history={history} />
+          </TabsContent>
+          <TabsContent value="historique">
+            <HistoriquePage />
           </TabsContent>
         </Tabs>
       </main>
