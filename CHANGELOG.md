@@ -20,6 +20,12 @@
 - The Hoymiles token is kept until Hoymiles rejects it, instead of a new login every 3 minutes.
 - Days in the history table no longer shift by one when the backend runs on Paris time.
 
+### Security
+- `JWT_SECRET`, `DATABASE_URL` and `POSTGRES_PASSWORD` have no default any more: the stack refuses to start without them.
+- Login is limited to 10 failed attempts per 15 minutes per IP, registration to 5 attempts per hour.
+- CORS is no longer enabled (the frontend is served from the same origin).
+- Dependencies updated to clear every `npm audit` finding (bcrypt 6, Express 4.22.3, tsx 4.23, Vite and transitive fixes).
+
 ### Removed
 - The unused energy-flow diagram component.
 - The Hoymiles MS-2A battery (collector, cards, flow diagram, health entry). Past days in the history table keep its figures.

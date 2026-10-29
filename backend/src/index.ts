@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import http from 'http';
 import { config } from './config';
 import { initDatabase } from './db';
@@ -25,7 +24,8 @@ async function main() {
   const server = http.createServer(app);
 
   // Middleware
-  app.use(cors());
+  // Traefik → nginx → backend: the client IP is two hops back in X-Forwarded-For
+  app.set('trust proxy', 2);
   app.use(express.json());
   app.use(authMiddleware);
 
