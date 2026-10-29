@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
-import { Sun, Battery, Zap, Power, PowerOff, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Sun, Battery, Zap, Power, PowerOff, TrendingUp, Home } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PVProductionChart } from '@/components/panels/PVProductionChart';
 import { cn, formatPower } from '@/lib/utils';
 import { sendVictronMode } from '@/lib/api';
+import { computeRates } from '@/lib/energy';
+import { useTodayEnergy } from '@/hooks/useTodayEnergy';
 import type { SystemState, HistoryPoint } from '@/lib/types';
 
 interface OverviewPageProps {
@@ -55,43 +57,10 @@ function BatteryCard({ title, soc, power, status, color }: {
   );
 }
 
-function computeDailyEnergy(history: HistoryPoint[]) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayMs = today.getTime();
-
-  const todayPoints = history.filter(p => new Date(p.timestamp).getTime() >= todayMs);
-  if (todayPoints.length < 2) return null;
-
-  const first = todayPoints[0]!;
-  const last = todayPoints[todayPoints.length - 1]!;
-
-  const dailyExportKwh = Math.max(0, (last.gridExportWh - first.gridExportWh) / 1000);
-  const dailyImportKwh = Math.max(0, (last.gridImportWh - first.gridImportWh) / 1000);
-
-  // Charge/decharge batterie : integration des puissances minute par minute
-  // Convention SolarPulse : negatif = charge, positif = decharge
-  // LiFePO4 via Victron passe par le Shelly → il faut le soustraire des compteurs Shelly
-  let chargeWh = 0;
-  let dischargeWh = 0;
-  for (const p of todayPoints) {
-    const lifepo = p.lifepePower ?? 0;
-    if (lifepo < 0) chargeWh += Math.abs(lifepo) / 60; // W * (1min / 60) = Wh
-    else if (lifepo > 0) dischargeWh += lifepo / 60;
-  }
-
-  return {
-    dailyExportKwh: Math.max(0, dailyExportKwh - chargeWh / 1000),
-    dailyImportKwh: Math.max(0, dailyImportKwh - dischargeWh / 1000),
-    dailyChargeKwh: Math.round(chargeWh / 10) / 100,
-    dailyDischargeKwh: Math.round(dischargeWh / 10) / 100,
-  };
-}
-
 export function OverviewPage({ state, history }: OverviewPageProps) {
   const [victronLoading, setVictronLoading] = useState(false);
 
-  const dailyEnergy = useMemo(() => computeDailyEnergy(history), [history]);
+  const today = useTodayEnergy();
 
   if (!state) {
     return (
@@ -102,6 +71,8 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
   }
 
   const victronOn = state.victron.mode !== 'off';
+  const paidLinky = state.computed.consumptionSource === 'linky';
+  const rates = today ? computeRates(today) : null;
   const gridPower = state.grid.totalPower;
 
   const gridLabel = victronOn
@@ -175,41 +146,47 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
         </Card>
       </div>
 
-      {/* Autoconsommation + Autosuffisance */}
-      {state.pv.todayYield > 0 && dailyEnergy && (() => {
-        const autoConsoPct = dailyEnergy.dailyExportKwh < 0.01 ? 100
-          : Math.min(100, Math.max(0, Math.round((state.pv.todayYield - dailyEnergy.dailyExportKwh) / state.pv.todayYield * 100)));
-        const local = (state.pv.todayYield - dailyEnergy.dailyChargeKwh) + dailyEnergy.dailyDischargeKwh;
-        const autoSuffPct = dailyEnergy.dailyImportKwh < 0.01 ? (local > 0 ? 100 : 0)
-          : Math.min(100, Math.max(0, Math.round(local / (local + dailyEnergy.dailyImportKwh) * 100)));
-        return (
-          <Card className="border-border bg-card/50">
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-4">
+      {/* Consommation + Autoconsommation + Autosuffisance */}
+      <Card className="border-border bg-card/50">
+        <CardContent className="py-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Home className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-medium">Conso.</span>
+                <span className="text-xl font-bold text-blue-400">{formatPower(state.computed.consumption)}</span>
+                <Badge className={cn('text-[10px]', paidLinky ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400')}>
+                  {paidLinky ? 'Linky (payant)' : 'Solaire + batterie'}
+                </Badge>
+              </div>
+              {rates && (
+                <>
                   <div className="flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-emerald-400" />
                     <span className="text-sm font-medium">Autoconso.</span>
-                    <span className="text-xl font-bold text-emerald-400">{autoConsoPct}%</span>
+                    <span className="text-xl font-bold text-emerald-400">{rates.autoconso}%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-amber-400" />
                     <span className="text-sm font-medium">Autosuffisance</span>
-                    <span className="text-xl font-bold text-amber-400">{autoSuffPct}%</span>
+                    <span className="text-xl font-bold text-amber-400">{rates.autosuff}%</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                  <span>PV: {state.pv.todayYield.toFixed(1)} kWh</span>
-                  <span>Charge: {dailyEnergy.dailyChargeKwh.toFixed(1)} kWh</span>
-                  <span>Decharge: {dailyEnergy.dailyDischargeKwh.toFixed(1)} kWh</span>
-                  <span>Export: {dailyEnergy.dailyExportKwh.toFixed(1)} kWh</span>
-                  <span>Import: {dailyEnergy.dailyImportKwh.toFixed(1)} kWh</span>
-                </div>
+                </>
+              )}
+            </div>
+            {today && (
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <span>PV: {today.pvYieldKwh.toFixed(1)} kWh</span>
+                <span>Conso.: {today.consumptionKwh.toFixed(1)} kWh</span>
+                <span>Charge: {today.chargeKwh.toFixed(1)} kWh</span>
+                <span>Decharge: {today.dischargeKwh.toFixed(1)} kWh</span>
+                <span>Linky import: {today.linkyImportKwh.toFixed(1)} kWh</span>
+                <span>Linky export: {today.linkyExportKwh.toFixed(1)} kWh</span>
               </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <PVProductionChart history={history} />
     </div>

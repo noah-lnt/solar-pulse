@@ -27,7 +27,7 @@ Dev servers and deployment: `README.md`.
 - **Hoymiles blacklisted the home IP for over-polling (2026-10).** Its schedule lives in `collectors/hoymiles.schedule.ts`: daylight only, 5 min, backoff 30 min → 6 h. Never shorten it without a rate agreed with Hoymiles, and never call the real API from dev.
 - Hoymiles calls go through `HOYMILES_PROXY_URL` (the `warp` service in Compose) and fail closed when it is down.
 - The app runs on **local-nolan-sarl**, on the same LAN as the Shelly and the Venus OS; it cannot run on a remote server without a tunnel.
-- **Victron ON = island**: a switch isolates the house from the Linky. The Shelly measures the Linky when the Victron is OFF and the Victron line when ON.
+- **Victron ON = island**: a switch isolates the house from the Linky. The Shelly measures the Linky when the Victron is OFF and the Victron line when ON; consumption = PV + Shelly in both modes, Linky energy only when OFF (`src/energy.ts`, `routes/daily.ts`).
 - Battery sign convention: positive = discharging, negative = charging (Victron and Hoymiles are inverted on read).
 - `history.ms2a_*` columns are kept for past days (the MS-2A was removed in 1.1.0); new rows write 0.
 - Daily dates leave SQL as `TO_CHAR(..., 'YYYY-MM-DD')` strings: the backend runs on `Europe/Paris`.
