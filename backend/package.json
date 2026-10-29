@@ -9,10 +9,10 @@
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.15.0",
     "pg": "^8.13.1",
@@ -29,7 +29,7 @@
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
     "@types/ws": "^8.5.13",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3"
   },
   "engines": {
