@@ -74,7 +74,6 @@ export interface ShellyData {
 export interface SystemState {
   timestamp: string;
   pv: HoymilesData;
-  ms2a: BatteryData;
   lifepoDiy: LiFePO4DiyData;
   victron: VictronData;
   grid: ShellyData;
@@ -93,6 +92,7 @@ export interface CollectorStatus {
   lastUpdate: string | null;
   errorCount: number;
   lastError: string | null;
+  nextAttempt?: string | null;
 }
 
 export interface HistoryPoint {
@@ -105,8 +105,6 @@ export interface HistoryPoint {
   gridImportWh: number;
   gridExportWh: number;
   // Battery details
-  ms2aSoc: number;
-  ms2aPower: number;
   lifepeSoc: number;
   lifepePower: number;
   // Victron

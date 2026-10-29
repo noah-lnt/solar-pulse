@@ -142,31 +142,6 @@ function startKeepalive(): void {
   keepaliveInterval = setInterval(sendKeepalive, 20000);
 }
 
-// Find a value matching a pattern in cached MQTT values
-// Venus OS uses instance IDs that we need to discover
-function findValue(servicePattern: string, path: string): number | null {
-  // Try exact match first
-  const exact = mqttValues[`${servicePattern}/${path}`];
-  if (exact !== undefined) return exact;
-
-  // Search through all cached values for matching service type and path
-  for (const [key, val] of Object.entries(mqttValues)) {
-    const parts = key.split('/');
-    // key format: service/instanceId/path...
-    if (parts[0] === servicePattern.split('/')[0]) {
-      // Check if the path portion matches
-      const pathStart = key.indexOf('/', key.indexOf('/') + 1);
-      if (pathStart >= 0) {
-        const keyPath = key.substring(pathStart + 1);
-        if (keyPath === path) {
-          return val;
-        }
-      }
-    }
-  }
-  return null;
-}
-
 function getVebusValue(path: string, fallback: number = 0): number {
   // Search for vebus/<any-id>/<path>
   for (const [key, val] of Object.entries(mqttValues)) {

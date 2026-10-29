@@ -1,6 +1,6 @@
 # SolarPulse
 
-Dashboard de supervision temps reel pour installation solaire hybride residentielle. Agregation de donnees multi-equipements (Hoymiles, Victron, Shelly) dans une interface moderne avec WebSocket et persistance PostgreSQL.
+Real-time dashboard for a residential hybrid solar installation. It aggregates Hoymiles (PV), Victron (inverter + battery) and Shelly (energy meter) data, pushes it over WebSocket and stores a per-minute history in PostgreSQL.
 
 ## Screenshots
 
@@ -14,258 +14,107 @@ Dashboard de supervision temps reel pour installation solaire hybride residentie
 
 ## Hardware
 
-L'installation solaire supervisee par SolarPulse est composee de :
-
-| Equipement | Role | Protocole |
+| Device | Role | Protocol |
 |---|---|---|
-| **Panneaux solaires** | Production photovoltaique | — |
-| **Hoymiles micro-onduleur** | Conversion DC/AC + monitoring PV | REST API (Cloud neapi.hoymiles.com) |
-| **Hoymiles MS-2A** | Batterie integree 2,4 kWh + passerelle | REST API (Cloud neapi.hoymiles.com) |
-| **Victron MultiPlus** | Onduleur/chargeur hybride | MQTT (Venus OS local) |
-| **Batterie LiFePO4 DIY** | Stockage 32 kWh (2x16 cellules) | MQTT via BMS + Venus OS |
-| **Shelly Pro 3EM** | Compteur d'energie triphase | REST API (reseau local) |
+| **Solar panels, 5 kWc** + Hoymiles micro-inverters | PV production | Hoymiles Cloud REST API |
+| **Victron MultiPlus** | Inverter/charger; ON = the house runs on battery + PV, isolated from the grid by a switch | MQTT (Venus OS, LAN) |
+| **LiFePO4 battery, 32 kWh** | Storage, managed by the Victron | MQTT through Venus OS (BMS) |
+| **Shelly Pro 3EM** | Three-phase meter: measures the Linky when the Victron is OFF, the Victron line when ON | REST (LAN) |
 
-### Schema de l'installation
+## Stack
 
-```
-                    Panneaux PV
-                        │
-                  Micro-onduleur
-                    Hoymiles
-                        │
-              ┌─────────┼─────────┐
-              │                   │
-         Hoymiles MS-2A     Shelly Pro 3EM ──── Reseau / Victron
-         (batterie 2,4kWh)    (compteur 3 phases)
-                                  │
-                            Victron MultiPlus
-                                  │
-                          Batterie LiFePO4 DIY
-                            (32kWh, 2x16 cells)
-```
-
-## Stack technique
-
-### Backend
-
-- **Runtime :** Node.js 20 + TypeScript
-- **Framework :** Express 4
-- **Base de donnees :** PostgreSQL 16
-- **Temps reel :** WebSocket natif (ws)
-- **MQTT :** mqtt.js pour Victron Venus OS
-- **Auth :** JWT + bcrypt
-
-### Frontend
-
-- **Framework :** React 18 + TypeScript
-- **Build :** Vite 6
-- **Styling :** Tailwind CSS 3.4 + shadcn/ui (New York)
-- **Graphiques :** Recharts 2
-- **Icones :** Lucide React
-
-### Infrastructure
-
-- **Conteneurisation :** Docker Compose (3 services)
-- **Reverse proxy :** Traefik v3 (HTTPS Let's Encrypt, reseau `web`) + Nginx (proxy interne API/WS)
-- **Base de donnees :** PostgreSQL 16 Alpine avec volume persistant
-- **Builds :** Multi-stage Docker (Node builder → production slim)
-
-## Architecture
+- **Backend:** Node.js 22, TypeScript, Express 4, PostgreSQL 16, `ws`, `mqtt`
+- **Frontend:** React 18, Vite 6, Tailwind CSS 3.4, shadcn/ui, Recharts
+- **Infrastructure:** Docker Compose (PostgreSQL, Cloudflare WARP, backend, frontend) behind Traefik
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    Docker Compose                     │
-│                                                       │
-│  ┌────────────┐     ┌──────────────┐    ┌──────────┐ │
-│  │  Frontend   │     │   Backend    │    │ Postgres │ │
-│  │  Nginx/React│◄─WS─┤  Express/TS  ├───►│   16     │ │
-│  │  Port 80    │     │  Port 3001   │    │          │ │
-│  └─────┬──────┘     └──────┬───────┘    └──────────┘ │
-│        │                   │                          │
-│    Traefik           Polling / MQTT                   │
-│   (externe)                │                          │
-└────────────────────────────┼──────────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-        ┌─────▼────┐  ┌─────▼────┐  ┌─────▼────┐
-        │  Shelly   │  │ Hoymiles │  │ Victron  │
-        │ Pro 3EM   │  │  Cloud   │  │ Venus OS │
-        │  REST     │  │  REST    │  │  MQTT    │
-        └──────────┘  └──────────┘  └──────────┘
+┌──────────────────────────── Docker Compose ─────────────────────────────┐
+│  Frontend (nginx) ◄─WS── Backend (Express) ───► PostgreSQL              │
+│        │                   │        │                                   │
+│     Traefik                │      WARP ──► Hoymiles Cloud               │
+└────────────────────────────┼────────────────────────────────────────────┘
+                     LAN: Shelly (REST), Venus OS (MQTT)
 ```
 
-### Collecteurs
+## Collectors
 
-Chaque equipement a son propre collecteur independant. Si un collecteur echoue, les autres continuent de fonctionner. Les dernieres valeurs connues sont conservees en cache pour eviter les trous de donnees.
+| Collector | Source | Interval |
+|---|---|---|
+| **Hoymiles PV** | Cloud API, through WARP | Every 5 min between sunrise and sunset; daily yield every 15 min |
+| **Shelly Pro 3EM** | REST, LAN | Every 10 s |
+| **Victron MultiPlus** | MQTT, Venus OS | Real time |
+| **LiFePO4 BMS** | MQTT, Venus OS | Real time |
 
-| Collecteur | Source | Intervalle | Donnees |
-|---|---|---|---|
-| **Hoymiles PV** | Cloud API (HOYMILES_STATION_ID) | ~3s | Puissance, production jour/totale |
-| **Hoymiles MS-2A** | Cloud API (HOYMILES_MS2A_STATION_ID) | ~3s | SOC, puissance charge/decharge |
-| **Shelly Pro 3EM** | REST local | ~2s | 3 phases (V, A, W, PF, Hz), import/export Wh |
-| **Victron MultiPlus** | MQTT Venus OS | Temps reel | Mode, tensions, puissance, charge |
-| **LiFePO4 BMS** | MQTT via Venus OS | Temps reel | SOC, tensions cellules (2x16), equilibrage |
+Hoymiles blocks IPs that poll too often, so its collector is deliberately slow:
 
-### Persistance
+- **Daylight only.** Sunrise and sunset are computed from `SITE_LATITUDE` / `SITE_LONGITUDE`. At night no call is made, and the dashboard keeps today's yield until midnight.
+- **One login per session.** The token is kept until Hoymiles rejects it; a rejection triggers one retry with a fresh token.
+- **Backoff.** After a failure the collector waits 30 min, then 1 h, 2 h, 4 h, up to 6 h, and makes no call meanwhile. `/api/health` shows `nextAttempt`.
+- **Separate egress IP.** In Docker, Hoymiles calls go through the `warp` service (`HOYMILES_PROXY_URL=http://warp:1080`). If the proxy is down, the call fails and backs off; it never falls back to a direct call.
 
-- **Historique :** Points minutaires stockes en PostgreSQL (stockage infini)
-- **Donnees :** PV, reseau, batteries (SOC, puissance), mode Victron, import/export Wh
-- **Memoire :** 24h en RAM pour acces rapide, chargement depuis la BDD au demarrage
+When another collector fails, the dashboard keeps its last known values.
 
-## Fonctionnalites
+## Configuration (`.env`)
 
-- **Vue d'ensemble** — Production PV, etat des 2 batteries (MS-2A + LiFePO4), echanges reseau/Victron, switch Victron ON/OFF
-- **Batteries** — Jauge SOC, puissance, details LiFePO4 (tension, courant, temperature, cycles), grille des cellules (2 packs x 16 cellules), etat Victron
-- **Reseau** — Puissance par phase, totaux import/export, contexte Victron (reseau public vs echanges Victron)
-- **Panneaux** — Puissance instantanee, production du jour, graphique 24h
-- **Temps reel** — WebSocket avec indicateur LIVE et reconnexion automatique
-- **Theme** — Mode clair / sombre avec persistance localStorage
-- **Auth** — JWT avec inscription/connexion
-- **Mode demo** — Donnees simulees realistes pour test sans hardware
+| Variable | Meaning |
+|---|---|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` | Database |
+| `JWT_SECRET` | Token signing secret |
+| `REGISTER_SECRET` | Code required to create the first account |
+| `SITE_LATITUDE`, `SITE_LONGITUDE` | Site position, used for sunrise/sunset (required unless `DEMO_MODE=true`) |
+| `SHELLY_IP` | Shelly Pro 3EM address on the LAN |
+| `HOYMILES_API_URL` | Hoymiles Cloud base URL (required unless `DEMO_MODE=true`) |
+| `HOYMILES_PROXY_URL` | HTTP proxy for Hoymiles calls; empty = direct. Docker Compose sets it to the `warp` service |
+| `HOYMILES_EMAIL`, `HOYMILES_PASSWORD`, `HOYMILES_STATION_ID` | Hoymiles account and PV station |
+| `VICTRON_VENUS_IP`, `VICTRON_MQTT_PORT` | Venus OS MQTT broker |
+| `BACKEND_PORT`, `WS_HEARTBEAT_MS` | Backend port, WebSocket heartbeat |
+| `DEMO_MODE` | `true` = simulated data, no device or cloud call |
+| `TRAEFIK_HOST` | Public host name |
 
-## Installation
-
-### Prerequis
-
-- Docker et Docker Compose
-- Reseau Traefik (`web`) existant avec HTTPS (Let's Encrypt)
-
-### Mise en place
+## Development
 
 ```bash
-git clone https://github.com/votre-username/solar-pulse.git
-cd solar-pulse
-
-# Configurer l'environnement
-cp .env.example .env
-# Editer .env avec vos IPs et credentials
-
-# Creer le reseau Traefik si necessaire
-docker network create web
-
-# Lancer
-docker compose up -d --build
-```
-
-### Configuration
-
-Editer le fichier `.env` :
-
-```env
-# PostgreSQL
-POSTGRES_PASSWORD=votre_mot_de_passe
-DATABASE_URL=postgresql://solarpulse:votre_mot_de_passe@postgres:5432/solarpulse
-
-# Auth
-JWT_SECRET=votre-secret-aleatoire-32-caracteres-minimum
-
-# Shelly Pro 3EM
-SHELLY_IP=192.168.1.XX
-
-# Hoymiles Cloud
-HOYMILES_EMAIL=votre@email.com
-HOYMILES_PASSWORD=votre_mot_de_passe
-HOYMILES_STATION_ID=123456
-HOYMILES_MS2A_STATION_ID=789012
-
-# Victron Venus OS
-VICTRON_VENUS_IP=192.168.1.XX
-VICTRON_MQTT_PORT=1883
-
-# Mode demo (donnees simulees sans hardware)
-DEMO_MODE=false
-
-# Traefik
-TRAEFIK_HOST=solarpulse.votre-domaine.com
-```
-
-### Mode demo
-
-Pour tester sans materiel, activez le mode demo :
-
-```env
-DEMO_MODE=true
-```
-
-Le backend generera des donnees realistes avec courbe solaire sinusoidale, simulation de charge/decharge des batteries et variations aleatoires.
-
-## Developpement
-
-### Avec Docker (recommande)
-
-Le fichier `docker-compose.dev.yml` expose PostgreSQL sur `localhost:5432` pour le dev local.
-
-```bash
-# 1. Lancer PostgreSQL en dev
+cd "$(git rev-parse --show-toplevel)"
+cp .env.example .env          # DEMO_MODE=true needs no device
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+# in .env: DATABASE_URL=postgresql://solarpulse:solarpulse_secret@localhost:5432/solarpulse
 
-# 2. Configurer l'environnement
-cp .env.example .env
-# Editer .env (DATABASE_URL=postgresql://solarpulse:solarpulse_secret@localhost:5432/solarpulse)
-
-# 3. Lancer le backend
-cd backend
-npm install
-npm run dev
-
-# 4. Lancer le frontend (dans un autre terminal)
-cd frontend
-npm install
-npm run dev
+cd backend && npm install && npm run dev      # API on :3001
+cd frontend && npm install && npm run dev     # Vite proxies /api and /ws to :3001
+cd backend && npm test                        # Hoymiles schedule tests
 ```
 
-### Sans Docker
+Never run with `DEMO_MODE=false` against the real `HOYMILES_API_URL` from a dev machine: every call counts against the Hoymiles rate limit.
 
-```bash
-# Prerequis : PostgreSQL installe localement
-# Creer la base et l'utilisateur, puis configurer DATABASE_URL dans .env
+## Deployment (local-nolan-sarl)
 
-cd backend && npm install && npm run dev
-cd frontend && npm install && npm run dev  # autre terminal
-```
+The stack runs on the product host, which is on the same LAN as the Shelly and the Venus OS. Only Hoymiles traffic leaves through WARP.
 
-Le frontend Vite proxifie automatiquement `/api/*` et `/ws` vers le backend local (port 3001).
+1. **Clone and configure** in `~/docker/project/solar-pulse`, then fill `.env` from `.env.example` (`DEMO_MODE=false`).
+2. **Check the LAN**: `curl -s http://<SHELLY_IP>/rpc/Shelly.GetStatus` answers JSON and `nc -vz <VICTRON_VENUS_IP> 1883` succeeds.
+3. **Start WARP and prove its egress**:
+   ```bash
+   docker compose up -d warp
+   docker compose ps warp        # healthy
+   docker compose exec warp curl -s -x http://127.0.0.1:1080 https://www.cloudflare.com/cdn-cgi/trace | grep -E 'ip=|warp='
+   ```
+   `warp=on` and an IP that is not the home IP.
+4. **Stop any other SolarPulse instance first.** Two instances double the Hoymiles traffic. To keep its history, `pg_dump` the old database and restore it into the new `postgres` service before step 5. The Compose project is named `solarpulse`, so its volume is `solarpulse_pgdata`.
+5. **Start**: `docker compose up -d --build`.
+6. **Watch**: `docker compose logs -f backend | grep Hoymiles` shows `(proxy)` on every call. After 24 h, `docker compose logs --since 24h backend | grep -c '\[Hoymiles\] POST'` should stay around 200 or less, with none between sunset and sunrise.
 
 ## API
 
-| Endpoint | Methode | Description |
+| Endpoint | Method | Description |
 |---|---|---|
-| `/api/auth/login` | POST | Connexion (email, password) |
-| `/api/auth/register` | POST | Inscription |
-| `/api/status` | GET | Etat complet du systeme |
-| `/api/history?range=24h` | GET | Historique (filtrable par duree) |
-| `/api/health` | GET | Sante des collecteurs |
-| `/api/victron/mode` | POST | Changer le mode Victron (on/off/charger/inverter) |
-| `/ws` | WS | Flux temps reel (SystemState toutes les 2-3s) |
-
-## Structure du projet
-
-```
-solar-pulse/
-├── docker-compose.yml
-├── .env.example
-├── backend/
-│   ├── Dockerfile
-│   └── src/
-│       ├── index.ts              # Serveur Express + boucle polling
-│       ├── aggregator.ts         # Agregation + historique + persistance
-│       ├── db.ts                 # PostgreSQL init + migrations
-│       ├── websocket.ts          # Serveur WebSocket
-│       ├── config.ts             # Variables d'environnement
-│       ├── auth/                 # JWT + bcrypt
-│       ├── collectors/           # Shelly, Hoymiles, Victron
-│       └── routes/               # Endpoints REST
-└── frontend/
-    ├── Dockerfile
-    ├── nginx.conf                # Proxy API/WS + cache statique
-    └── src/
-        ├── App.tsx               # Routing auth
-        ├── components/           # UI (shadcn/ui + custom)
-        ├── pages/                # Vue d'ensemble, Batteries, Reseau, Panneaux
-        ├── hooks/                # useWebSocket, useSystemState, useTheme, useAuth
-        └── lib/                  # Types, utilitaires, API client
-```
+| `/api/auth/login` | POST | Log in (email, password) |
+| `/api/auth/register` | POST | Create the first account (`secret` = `REGISTER_SECRET`) |
+| `/api/status` | GET | Full system state |
+| `/api/history?range=24h` | GET | Per-minute history |
+| `/api/history/daily?period=7d\|30d\|6m` | GET | Daily totals |
+| `/api/health` | GET | Collector status, including Hoymiles `nextAttempt` |
+| `/api/victron/mode` | POST | Set the Victron mode (on/off/charger/inverter) |
+| `/ws` | WS | Real-time `SystemState` every 10 s |
 
 ## License
 

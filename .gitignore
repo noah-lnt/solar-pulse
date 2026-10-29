@@ -4,3 +4,5 @@ dist/
 pgdata/
 *.log
 .DS_Store
+warp-data/
+*.tsbuildinfo

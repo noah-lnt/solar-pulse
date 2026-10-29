@@ -1,3 +1,5 @@
+name: solarpulse
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,6 +17,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  warp:
+    image: caomingjun/warp:2026.8.2110.0-2.12.0
+    restart: unless-stopped
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      WARP_SLEEP: 2
+    volumes:
+      - ./warp-data:/var/lib/cloudflare-warp
+    networks:
+      - solarpulse
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   backend:
     build:
@@ -22,12 +49,21 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      TZ: Europe/Paris
+      HOYMILES_PROXY_URL: http://warp:1080
     depends_on:
       postgres:
+        condition: service_healthy
+      warp:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - solarpulse
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   frontend:
     build:
@@ -39,6 +75,10 @@ services:
     networks:
       - solarpulse
       - web
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     labels:
       - "traefik.enable=true"
       # HTTP → HTTPS redirect

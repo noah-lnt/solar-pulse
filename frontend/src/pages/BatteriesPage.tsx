@@ -18,10 +18,7 @@ export function BatteriesPage({ state }: BatteriesPageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <BatteryGauge title="Hoymiles MS-2A" data={state.ms2a} color="text-emerald-400" showDetails={false} />
-        <BatteryGauge title="LiFePO4 DIY" data={state.lifepoDiy} color="text-purple-400" showDetails={true} />
-      </div>
+      <BatteryGauge title="LiFePO4 DIY" data={state.lifepoDiy} color="text-purple-400" showDetails={true} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <CellVoltagesGrid data={state.lifepoDiy} />
