@@ -56,7 +56,6 @@ const dispatcher = config.hoymilesProxyUrl ? new ProxyAgent(config.hoymilesProxy
 const DAILY_YIELD_TTL_MS = 15 * 60_000;
 
 let cloudToken: string | null = null;
-const sdUriCache: Record<string, string> = {};
 let cachedDailyYield: { value: number; date: string; timestamp: number } | null = null;
 
 async function hoymilesPost(url: string, body: unknown, token?: string) {
@@ -106,9 +105,6 @@ async function getCloudToken(): Promise<string> {
 
 function invalidateToken(): void {
   cloudToken = null;
-  for (const key of Object.keys(sdUriCache)) {
-    delete sdUriCache[key];
-  }
 }
 
 // ── API helpers ──
@@ -142,10 +138,8 @@ async function authenticatedPost(url: string, body: Record<string, unknown>, ret
   return json;
 }
 
+// The SD URI is a burst URL that expires ~2.5 min after issue (measured 2026-10-29): fetch one per poll.
 async function getSdUri(stationId: string): Promise<string> {
-  const cached = sdUriCache[stationId];
-  if (cached) return cached;
-
   const json = await authenticatedPost(
     `${config.hoymilesApiUrl}/pvm/api/0/station/get_sd_uri`,
     { sid: Number(stationId) },
@@ -158,8 +152,6 @@ async function getSdUri(stationId: string): Promise<string> {
     throw new Error(`Hoymiles: no SD URI for station ${stationId}`);
   }
 
-  console.log(`[Hoymiles] SD URI for station ${stationId}: ${uri}`);
-  sdUriCache[stationId] = uri;
   return uri;
 }
 
@@ -169,7 +161,6 @@ async function getStationData(stationId: string): Promise<Record<string, unknown
   const data = json.data as Record<string, unknown> | undefined;
 
   if (!data || !data.power) {
-    delete sdUriCache[stationId];
     throw new Error(`Hoymiles: empty station data, response: ${JSON.stringify(json).slice(0, 500)}`);
   }
 

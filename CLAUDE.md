@@ -35,6 +35,6 @@ Dev servers and deployment: `README.md`.
 
 ## Verify
 
-- Hoymiles changes: `npm test`, then run the backend with `DEMO_MODE=false`, `HOYMILES_API_URL` pointing at a local mock and a throwaway `DATABASE_URL`; count the mock's calls (one poll = login, sd_uri, data, daily yield; then nothing for 5 min).
+- Hoymiles changes: `npm test`, then run the backend with `DEMO_MODE=false`, `HOYMILES_API_URL` pointing at a local mock and a throwaway `DATABASE_URL`; count the mock's calls (first poll = login, sd_uri, data, daily yield; every next poll 5 min later = sd_uri + data, no login).
 - UI changes: `DEMO_MODE=true` backend + `npm run dev` in `frontend/`, checked in a browser.
 - On the server: count `[Hoymiles] POST` lines over 24 h (README, Deployment step 6).

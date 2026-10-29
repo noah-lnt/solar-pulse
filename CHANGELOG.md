@@ -9,7 +9,7 @@
 ### Changed
 - Consumption is PV + Shelly in both Victron modes, and only Victron-OFF minutes count as Linky import/export; self-consumption and self-sufficiency are computed from those Linky figures. Past days are recomputed from the stored Victron mode.
 - The overview's daily figures come from the same calculation as the history table.
-- Hoymiles is polled only between sunrise and sunset at the site (`SITE_LATITUDE`, `SITE_LONGITUDE`), every 5 minutes, with the daily yield refreshed every 15 minutes: about 150–200 calls a day instead of ~5,900.
+- Hoymiles is polled only between sunrise and sunset at the site (`SITE_LATITUDE`, `SITE_LONGITUDE`), every 5 minutes (a fresh SD URI, which expires ~2.5 minutes after issue, then the data), with the daily yield refreshed every 15 minutes: about 250 calls a day in winter and 450 in midsummer, instead of ~5,900.
 - After a Hoymiles failure the backend waits 30 minutes, doubling up to 6 hours, instead of retrying at once; `/api/health` shows the next attempt.
 - Hoymiles calls can go through an HTTP proxy (`HOYMILES_PROXY_URL`); the Docker stack routes them through a Cloudflare WARP container. If the proxy is down, the call fails instead of going out directly.
 - At night the dashboard keeps today's PV yield instead of resetting it to 0.
