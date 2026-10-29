@@ -10,7 +10,7 @@ const demoMode = process.env.DEMO_MODE === 'true';
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`${name} is required when DEMO_MODE is not true`);
+    throw new Error(`${name} is required`);
   }
   return value;
 }
@@ -28,10 +28,10 @@ export const config = {
   demoMode,
 
   // Database
-  databaseUrl: process.env.DATABASE_URL || 'postgresql://solarpulse:solarpulse_secret@postgres:5432/solarpulse',
+  databaseUrl: required('DATABASE_URL'),
 
   // Auth
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  jwtSecret: required('JWT_SECRET'),
   registerSecret: process.env.REGISTER_SECRET || '',
 
   // Site (sunrise/sunset for Hoymiles polling)

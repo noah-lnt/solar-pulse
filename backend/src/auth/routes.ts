@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { createHash, timingSafeEqual } from 'crypto';
+import { rateLimit } from 'express-rate-limit';
 import { pool } from '../db';
 import { config } from '../config';
 import { hashPassword, comparePassword, generateToken } from './utils';
@@ -6,7 +8,29 @@ import { AuthRequest } from './middleware';
 
 const router = Router();
 
-router.post('/register', async (req: AuthRequest, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives, reessayez dans 15 minutes' },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives, reessayez plus tard' },
+});
+
+function secretMatches(given: unknown, expected: string): boolean {
+  const digest = (v: string) => createHash('sha256').update(v).digest();
+  return typeof given === 'string' && timingSafeEqual(digest(given), digest(expected));
+}
+
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, secret } = req.body;
 
@@ -20,19 +44,16 @@ router.post('/register', async (req: AuthRequest, res) => {
       return;
     }
 
-    // Verify registration secret if configured (skip for authenticated users)
-    if (config.registerSecret && !req.user) {
-      if (!secret || secret !== config.registerSecret) {
-        res.status(403).json({ error: 'Code d\'inscription invalide' });
-        return;
-      }
+    if (config.registerSecret && !secretMatches(secret, config.registerSecret)) {
+      res.status(403).json({ error: 'Code d\'inscription invalide' });
+      return;
     }
 
-    // Allow registration only if no users exist or if authenticated
+    // Only the first account can register; the route is public
     const countResult = await pool.query('SELECT COUNT(*) FROM users');
     const userCount = parseInt(countResult.rows[0].count, 10);
 
-    if (userCount > 0 && !req.user) {
+    if (userCount > 0) {
       res.status(403).json({ error: 'Inscription fermee. Contactez un administrateur.' });
       return;
     }
@@ -59,7 +80,7 @@ router.post('/register', async (req: AuthRequest, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 

@@ -69,8 +69,8 @@ The daily table counts Linky import/export from the Shelly energy counters, only
 
 | Variable | Meaning |
 |---|---|
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` | Database |
-| `JWT_SECRET` | Token signing secret |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` | Database; `POSTGRES_PASSWORD` and `DATABASE_URL` are required |
+| `JWT_SECRET` | Token signing secret, required (the backend refuses to start without it) |
 | `REGISTER_SECRET` | Code required to create the first account |
 | `SITE_LATITUDE`, `SITE_LONGITUDE` | Site position, used for sunrise/sunset (required unless `DEMO_MODE=true`) |
 | `SHELLY_IP` | Shelly Pro 3EM address on the LAN |
@@ -118,8 +118,8 @@ The stack runs on the product host, which is on the same LAN as the Shelly and t
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/auth/login` | POST | Log in (email, password) |
-| `/api/auth/register` | POST | Create the first account (`secret` = `REGISTER_SECRET`) |
+| `/api/auth/login` | POST | Log in (email, password); 10 failed attempts per 15 min per IP |
+| `/api/auth/register` | POST | Create the first account (`secret` = `REGISTER_SECRET`); 5 attempts per hour per IP |
 | `/api/status` | GET | Full system state |
 | `/api/history?range=24h` | GET | Per-minute history |
 | `/api/history/daily?period=7d\|30d\|6m` | GET | Daily totals |
