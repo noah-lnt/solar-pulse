@@ -49,6 +49,7 @@ Hoymiles blocks IPs that poll too often, so its collector is deliberately slow:
 
 - **Daylight only.** Sunrise and sunset are computed from `SITE_LATITUDE` / `SITE_LONGITUDE`. At night no call is made, and the dashboard keeps today's yield until midnight.
 - **One login per session.** The token is kept until Hoymiles rejects it; a rejection triggers one retry with a fresh token.
+- **Two calls per poll.** Hoymiles serves the live data from a short-lived URL (it expires ~2.5 min after issue), so each poll fetches a fresh one, then the data; the daily yield adds one call every 15 min.
 - **Backoff.** After a failure the collector waits 30 min, then 1 h, 2 h, 4 h, up to 6 h, and makes no call meanwhile. `/api/health` shows `nextAttempt`.
 - **Separate egress IP.** In Docker, Hoymiles calls go through the `warp` service (`HOYMILES_PROXY_URL=http://warp:1080`). If the proxy is down, the call fails and backs off; it never falls back to a direct call.
 
@@ -112,7 +113,7 @@ The stack runs on the product host, which is on the same LAN as the Shelly and t
    `warp=on` and an IP that is not the home IP.
 4. **Stop any other SolarPulse instance first.** Two instances double the Hoymiles traffic. To keep its history, `pg_dump` the old database and restore it into the new `postgres` service before step 5. The Compose project is named `solarpulse`, so its volume is `solarpulse_pgdata`.
 5. **Start**: `docker compose up -d --build`.
-6. **Watch**: `docker compose logs -f backend | grep Hoymiles` shows `(proxy)` on every call. After 24 h, `docker compose logs --since 24h backend | grep -c '\[Hoymiles\] POST'` should stay around 200 or less, with none between sunset and sunrise.
+6. **Watch**: `docker compose logs -f backend | grep Hoymiles` shows `(proxy)` on every call. After 24 h, `docker compose logs --since 24h backend | grep -c '\[Hoymiles\] POST'` should stay around 250 in winter (450 in midsummer), with none between sunset and sunrise.
 
 ## API
 
