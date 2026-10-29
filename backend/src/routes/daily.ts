@@ -16,7 +16,7 @@ router.get('/daily', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT
-        DATE(timestamp AT TIME ZONE 'Europe/Paris') AS day,
+        TO_CHAR(DATE(timestamp AT TIME ZONE 'Europe/Paris'), 'YYYY-MM-DD') AS day,
         ROUND((SUM(pv_power) / 60 / 1000)::numeric, 2) AS pv_yield_kwh,
         ROUND(((MAX(grid_import_wh) - MIN(grid_import_wh)) / 1000)::numeric, 2) AS grid_import_kwh,
         ROUND(((MAX(grid_export_wh) - MIN(grid_export_wh)) / 1000)::numeric, 2) AS grid_export_kwh,
@@ -42,7 +42,7 @@ router.get('/daily', async (req, res) => {
       const lifepoDischarge = parseFloat(row.lifepo_discharge_kwh) || 0;
 
       return {
-        date: row.day.toISOString().slice(0, 10),
+        date: row.day,
         pvYieldKwh: parseFloat(row.pv_yield_kwh) || 0,
         gridImportKwh: Math.max(0, Math.round((gridImport - lifepoDischarge) * 100) / 100),
         gridExportKwh: Math.max(0, Math.round((gridExport - lifepoCharge) * 100) / 100),
