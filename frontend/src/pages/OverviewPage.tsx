@@ -71,34 +71,18 @@ function computeDailyEnergy(history: HistoryPoint[]) {
 
   // Charge/decharge batterie : integration des puissances minute par minute
   // Convention SolarPulse : negatif = charge, positif = decharge
+  // LiFePO4 via Victron passe par le Shelly → il faut le soustraire des compteurs Shelly
   let chargeWh = 0;
   let dischargeWh = 0;
-  // LiFePO4 via Victron passe par le Shelly → il faut le soustraire des compteurs Shelly
-  let lifepoChargeWh = 0;
-  let lifepoDischargeWh = 0;
   for (const p of todayPoints) {
-    const ms2a = p.ms2aPower ?? 0;
     const lifepo = p.lifepePower ?? 0;
-    const totalBatPower = ms2a + lifepo;
-    if (totalBatPower < 0) {
-      chargeWh += Math.abs(totalBatPower) / 60; // W * (1min / 60) = Wh
-    } else if (totalBatPower > 0) {
-      dischargeWh += totalBatPower / 60;
-    }
-    // Tracker LiFePO4 separement (transite par Shelly via Victron)
-    if (lifepo < 0) lifepoChargeWh += Math.abs(lifepo) / 60;
-    else if (lifepo > 0) lifepoDischargeWh += lifepo / 60;
+    if (lifepo < 0) chargeWh += Math.abs(lifepo) / 60; // W * (1min / 60) = Wh
+    else if (lifepo > 0) dischargeWh += lifepo / 60;
   }
 
-  // Corriger les compteurs Shelly : retirer les flux Victron/LiFePO4
-  // Charge LiFePO4 = Shelly voit "export" mais c'est de la charge batterie
-  // Decharge LiFePO4 = Shelly voit "import" mais c'est de la decharge batterie
-  const realExportKwh = Math.max(0, dailyExportKwh - lifepoChargeWh / 1000);
-  const realImportKwh = Math.max(0, dailyImportKwh - lifepoDischargeWh / 1000);
-
   return {
-    dailyExportKwh: realExportKwh,
-    dailyImportKwh: realImportKwh,
+    dailyExportKwh: Math.max(0, dailyExportKwh - chargeWh / 1000),
+    dailyImportKwh: Math.max(0, dailyImportKwh - dischargeWh / 1000),
     dailyChargeKwh: Math.round(chargeWh / 10) / 100,
     dailyDischargeKwh: Math.round(dischargeWh / 10) / 100,
   };
@@ -132,7 +116,7 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* 1. Production PV */}
         <Card className="border-border bg-card/50">
           <CardContent className="pt-4">
@@ -145,16 +129,7 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
           </CardContent>
         </Card>
 
-        {/* 2. Batterie MS-2A */}
-        <BatteryCard
-          title="MS-2A"
-          soc={state.ms2a.soc}
-          power={state.ms2a.power}
-          status={state.ms2a.status}
-          color="text-emerald-400"
-        />
-
-        {/* 3. Batterie LiFePO4 */}
+        {/* 2. Batterie LiFePO4 */}
         <BatteryCard
           title="LiFePO4"
           soc={state.lifepoDiy.soc}
@@ -163,7 +138,7 @@ export function OverviewPage({ state, history }: OverviewPageProps) {
           color="text-purple-400"
         />
 
-        {/* 4. Shelly + Victron switch */}
+        {/* 3. Shelly + Victron switch */}
         <Card className="border-border bg-card/50">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between mb-2">

@@ -26,7 +26,6 @@ export const config = {
   hoymilesEmail: process.env.HOYMILES_EMAIL || '',
   hoymilesPassword: process.env.HOYMILES_PASSWORD || '',
   hoymilesStationId: process.env.HOYMILES_STATION_ID || '',
-  hoymilesMs2aStationId: process.env.HOYMILES_MS2A_STATION_ID || '',
 
   // Victron
   victronVenusIp: process.env.VICTRON_VENUS_IP || '192.168.1.XX',

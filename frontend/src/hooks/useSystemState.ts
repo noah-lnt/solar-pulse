@@ -41,8 +41,6 @@ export function useSystemState(lastWsState: SystemState | null) {
           consumption: lastWsState.pv.powerNow + lastWsState.computed.totalBatteryPower + lastWsState.grid.totalPower,
           gridImportWh: lastWsState.grid.totalImportWh,
           gridExportWh: lastWsState.grid.totalExportWh,
-          ms2aSoc: lastWsState.ms2a.soc,
-          ms2aPower: lastWsState.ms2a.power,
           lifepeSoc: lastWsState.lifepoDiy.soc,
           lifepePower: lastWsState.lifepoDiy.power,
           victronMode: lastWsState.victron.mode,

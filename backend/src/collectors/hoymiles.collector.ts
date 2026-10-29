@@ -1,17 +1,9 @@
 import { createHash } from 'crypto';
-import { HoymilesData, BatteryData, PVPanel, CollectorStatus } from './types';
+import { HoymilesData, PVPanel, CollectorStatus } from './types';
 import { config } from '../config';
 
 let pvStatus: CollectorStatus = {
   name: 'Hoymiles PV',
-  connected: false,
-  lastUpdate: null,
-  errorCount: 0,
-  lastError: null,
-};
-
-let ms2aStatus: CollectorStatus = {
-  name: 'Hoymiles MS-2A',
   connected: false,
   lastUpdate: null,
   errorCount: 0,
@@ -32,8 +24,6 @@ function getSolarFactor(): number {
 
 let todayYield = 0;
 const totalYield = 1250;
-let ms2aSoc = 65;
-let ms2aCycles = 142;
 
 // --- Hoymiles Cloud API (neapi.hoymiles.com) ---
 const HOYMILES_API_BASE = 'https://neapi.hoymiles.com';
@@ -224,28 +214,6 @@ async function getDailyYield(stationId: string): Promise<number> {
   return yieldKwh;
 }
 
-// ── Shared cache for MS-2A station data ──
-// All panels go through the MS-2A, so pv2 from MS-2A station is the real-time PV power.
-// The classic PV station has a ~5 min sync delay, so we prefer MS-2A data.
-// We cache the full MS-2A response to avoid double API calls (used by both PV and MS-2A collectors).
-let cachedMs2aData: Record<string, unknown> | null = null;
-let cachedMs2aTimestamp = 0;
-const MS2A_CACHE_TTL_MS = 2000; // Cache for 2 seconds
-
-async function getMs2aData(): Promise<Record<string, unknown> | null> {
-  if (!config.hoymilesMs2aStationId) return null;
-
-  const now = Date.now();
-  if (cachedMs2aData && (now - cachedMs2aTimestamp) < MS2A_CACHE_TTL_MS) {
-    return cachedMs2aData;
-  }
-
-  const sdUri = await getSdUri(config.hoymilesMs2aStationId);
-  cachedMs2aData = await getStationData(sdUri);
-  cachedMs2aTimestamp = now;
-  return cachedMs2aData;
-}
-
 // ── Real collectors ──
 
 async function collectRealHoymiles(): Promise<HoymilesData> {
@@ -279,50 +247,6 @@ async function collectRealHoymiles(): Promise<HoymilesData> {
     panels: [],
     inverterTemp: 0,
     status: pvPower > 10 ? 'producing' : 'idle',
-  };
-}
-
-async function collectRealMS2A(): Promise<BatteryData> {
-  const ms2aData = await getMs2aData();
-  if (!ms2aData) {
-    ms2aStatus = { ...ms2aStatus, connected: false, lastError: 'HOYMILES_MS2A_STATION_ID requis' };
-    return {
-      soc: 0, power: 0, voltage: 0, current: 0, temperature: 0,
-      capacityWh: 2400, status: 'offline', cycles: 0,
-    };
-  }
-
-  // Response structure for MS-2A station:
-  // {
-  //   power: { pv: 0, pv2: 556.7, pvr: 0, pvr2: 0, bat: 543.6, grid: 13.1, load: 0, sp: 0 },
-  //   soc: 46.9,
-  //   flow: [...],
-  //   brs: 1, chs: 0, bhs: 0, ems: 2
-  // }
-  const power = ms2aData.power as Record<string, number> | undefined;
-
-  const soc = parseFloat(String(ms2aData.soc ?? 0));
-  const batRaw = power?.bat ?? 0;
-  // Hoymiles API: bat positive = charging, negative = discharging (inverse de SolarPulse)
-  // SolarPulse convention: positive = discharging, negative = charging → on inverse le signe
-  const batPower = -batRaw;
-  const ms2aPvPower = power?.pv2 ?? 0;    // PV power through MS-2A
-  const gridPowerMs2a = power?.grid ?? 0; // Grid exchange through MS-2A
-  const loadPower = power?.load ?? 0;     // Load through MS-2A
-
-  ms2aStatus = { ...ms2aStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0, lastError: null };
-
-  console.log(`[Hoymiles MS-2A] soc=${soc}% bat=${batPower}W pv2=${ms2aPvPower}W grid=${gridPowerMs2a}W load=${loadPower}W`);
-
-  return {
-    soc: Math.round(soc * 10) / 10,
-    power: Math.round(batPower),
-    voltage: 0,
-    current: 0,
-    temperature: 0,
-    capacityWh: 2400,
-    status: batPower < -10 ? 'charging' : batPower > 10 ? 'discharging' : 'idle',
-    cycles: 0,
   };
 }
 
@@ -377,55 +301,6 @@ export async function collectHoymiles(): Promise<HoymilesData> {
   }
 }
 
-export async function collectMS2A(pvPower: number, gridPower: number): Promise<BatteryData> {
-  if (config.demoMode) {
-    const surplus = pvPower - Math.abs(gridPower > 0 ? 0 : gridPower);
-    let batteryPower = 0;
-
-    if (surplus > 100 && ms2aSoc < 100) {
-      batteryPower = -Math.min(surplus * 0.5, 1000);
-      ms2aSoc += Math.abs(batteryPower) * 2 / (2000 * 3600) * 100;
-    } else if (gridPower > 200 && ms2aSoc > 10) {
-      batteryPower = Math.min(gridPower * 0.4, 800);
-      ms2aSoc -= batteryPower * 2 / (2000 * 3600) * 100;
-    }
-
-    ms2aSoc = Math.max(5, Math.min(100, ms2aSoc));
-
-    const voltage = randomVariation(51.2 + (ms2aSoc - 50) * 0.05, 1);
-    const current = batteryPower / voltage;
-
-    ms2aStatus = { ...ms2aStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0 };
-
-    return {
-      soc: Math.round(ms2aSoc * 10) / 10,
-      power: Math.round(batteryPower),
-      voltage: Math.round(voltage * 10) / 10,
-      current: Math.round(current * 100) / 100,
-      temperature: Math.round(randomVariation(28, 10)),
-      capacityWh: 2400,
-      status: batteryPower < -10 ? 'charging' : batteryPower > 10 ? 'discharging' : 'idle',
-      cycles: ms2aCycles,
-    };
-  }
-
-  try {
-    return await collectRealMS2A();
-  } catch (error) {
-    ms2aStatus = {
-      ...ms2aStatus,
-      connected: false,
-      errorCount: ms2aStatus.errorCount + 1,
-      lastError: error instanceof Error ? error.message : String(error),
-    };
-    throw error;
-  }
-}
-
 export function getHoymilesStatus(): CollectorStatus {
   return pvStatus;
-}
-
-export function getMS2AStatus(): CollectorStatus {
-  return ms2aStatus;
 }

@@ -54,7 +54,6 @@ export function EnergyFlowDiagram({ state }: EnergyFlowDiagramProps) {
   const consumption = pvPower + batteryPower + gridPower;
 
   const victronOn = state.victron.mode !== 'off';
-  const ms2aOnline = state.ms2a.status !== 'offline';
   const lifepoOnline = state.lifepoDiy.status !== 'offline';
 
   return (
@@ -113,31 +112,13 @@ export function EnergyFlowDiagram({ state }: EnergyFlowDiagramProps) {
         <div className="mt-4 flex items-center justify-center gap-6">
           <FlowArrow
             power={batteryPower}
-            from="Batteries"
+            from="Batterie"
             to="Maison"
             colorPos="text-orange-500"
             colorNeg="text-emerald-500"
           />
 
           <div className="flex gap-4">
-            {/* MS-2A */}
-            {ms2aOnline ? (
-              <BatteryNode
-                label="MS-2A"
-                soc={state.ms2a.soc}
-                power={state.ms2a.power}
-              />
-            ) : (
-              <div className="flex flex-col items-center gap-1 opacity-40">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-500/10">
-                  <Battery className="h-5 w-5 text-zinc-500" />
-                </div>
-                <span className="text-xs text-zinc-500">--</span>
-                <span className="text-[10px] text-zinc-500">MS-2A</span>
-              </div>
-            )}
-
-            {/* LiFePO4 */}
             {lifepoOnline ? (
               <BatteryNode
                 label="LiFePO4"
