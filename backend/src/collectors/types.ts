@@ -92,6 +92,7 @@ export interface CollectorStatus {
   lastUpdate: string | null;
   errorCount: number;
   lastError: string | null;
+  nextAttempt?: string | null;
 }
 
 export interface HistoryPoint {

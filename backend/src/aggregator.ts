@@ -1,4 +1,4 @@
-import { SystemState, HistoryPoint, HoymilesData, ShellyData, VictronData, LiFePO4DiyData } from './collectors/types';
+import { SystemState, HistoryPoint, ShellyData, VictronData, LiFePO4DiyData } from './collectors/types';
 import { collectHoymiles } from './collectors/hoymiles.collector';
 import { collectShelly } from './collectors/shelly.collector';
 import { collectVictron, collectLiFePO4 } from './collectors/victron.collector';
@@ -8,10 +8,6 @@ const MAX_MEMORY_POINTS = 1440; // 24h in memory for fast access
 const history: HistoryPoint[] = [];
 let lastHistoryMinute = -1;
 let currentState: SystemState | null = null;
-
-const defaultPv: HoymilesData = {
-  powerNow: 0, todayYield: 0, totalYield: 0, panels: [], inverterTemp: 0, status: 'offline',
-};
 
 const defaultGrid: ShellyData = {
   phases: [
@@ -34,12 +30,6 @@ const defaultLifepo: LiFePO4DiyData = {
 
 // Cache des dernieres valeurs connues pour chaque collecteur
 const lastKnown: Record<string, unknown> = {};
-
-// Throttling par collecteur (intervalle en ms)
-const HOYMILES_INTERVAL = 120_000; // 120s
-
-let lastHoymilesCollect = 0;
-let cachedPv: HoymilesData | null = null;
 
 async function safeCollect<T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -122,21 +112,8 @@ async function saveHistoryPoint(point: HistoryPoint): Promise<void> {
 // ── Aggregation ──
 
 export async function aggregate(): Promise<SystemState> {
-  const now = Date.now();
-
-  // Hoymiles: collecter toutes les 120s, skip entre 22h et 4h (pas de production PV)
-  const hour = new Date().getHours();
-  const isNight = hour >= 22 || hour < 4;
-  if (isNight) {
-    cachedPv = defaultPv;
-  } else if (now - lastHoymilesCollect >= HOYMILES_INTERVAL || !cachedPv) {
-    cachedPv = await safeCollect('Hoymiles', () => collectHoymiles(), defaultPv);
-    lastHoymilesCollect = now;
-  }
-  const pv = cachedPv;
-
+  const pv = await collectHoymiles(new Date());
   const grid = await safeCollect('Shelly', () => collectShelly(pv.powerNow), defaultGrid);
-
   const victron = await safeCollect('Victron', () => collectVictron(pv.powerNow, grid.totalPower), defaultVictron);
   const lifepoDiy = await safeCollect('LiFePO4', () => collectLiFePO4(victron.mode, victron.outputPower), defaultLifepo);
 

@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
+import { fetch, ProxyAgent } from 'undici';
 import { HoymilesData, PVPanel, CollectorStatus } from './types';
 import { config } from '../config';
+import { isDaylight, nextPollAfterSuccess, backoffDelay } from './hoymiles.schedule';
 
 let pvStatus: CollectorStatus = {
   name: 'Hoymiles PV',
@@ -8,6 +10,13 @@ let pvStatus: CollectorStatus = {
   lastUpdate: null,
   errorCount: 0,
   lastError: null,
+  nextAttempt: null,
+};
+
+const DEMO_PEAK_POWER_W = 5000;
+
+const defaultPv: HoymilesData = {
+  powerNow: 0, todayYield: 0, totalYield: 0, panels: [], inverterTemp: 0, status: 'offline',
 };
 
 function randomVariation(base: number, percent: number): number {
@@ -22,11 +31,17 @@ function getSolarFactor(): number {
   return Math.sin(normalized * Math.PI);
 }
 
-let todayYield = 0;
-const totalYield = 1250;
+function localDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
-// --- Hoymiles Cloud API (neapi.hoymiles.com) ---
-const HOYMILES_API_BASE = 'https://neapi.hoymiles.com';
+let demoTodayYield = 0;
+const demoTotalYield = 1250;
+
+// --- Hoymiles Cloud API ---
 
 const API_HEADERS: Record<string, string> = {
   'accept': 'application/json',
@@ -35,35 +50,37 @@ const API_HEADERS: Record<string, string> = {
   'language': 'fr-fr',
 };
 
+// Fails closed: with a proxy configured, a proxy outage fails the call instead of going out direct.
+const dispatcher = config.hoymilesProxyUrl ? new ProxyAgent(config.hoymilesProxyUrl) : undefined;
+
+const DAILY_YIELD_TTL_MS = 15 * 60_000;
+
 let cloudToken: string | null = null;
-let tokenTimestamp = 0;
-const TOKEN_TTL_MS = 3 * 60 * 1000; // Renouveler le token toutes les 3 minutes
-// Cache SD URIs per station ID (with TTL)
-const sdUriCache: Record<string, { uri: string; timestamp: number }> = {};
-const SD_URI_TTL_MS = 2 * 60 * 1000; // SD URI expire toutes les 2 minutes
-// Cache daily yield (pas besoin de refresh toutes les 2s)
+const sdUriCache: Record<string, string> = {};
 let cachedDailyYield: { value: number; date: string; timestamp: number } | null = null;
-const DAILY_YIELD_TTL_MS = 60 * 1000; // Refresh toutes les 60 secondes
+
+async function hoymilesPost(url: string, body: unknown, token?: string) {
+  console.log(`[Hoymiles] POST ${new URL(url).pathname}${dispatcher ? ' (proxy)' : ''}`);
+  return fetch(url, {
+    method: 'POST',
+    headers: token ? { ...API_HEADERS, authorization: token } : API_HEADERS,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+    dispatcher,
+  });
+}
 
 // ── Auth ──
 
 async function hoymilesLogin(): Promise<string> {
   if (!config.hoymilesEmail || !config.hoymilesPassword) {
-    throw new Error('HOYMILES_EMAIL et HOYMILES_PASSWORD requis');
+    throw new Error('HOYMILES_EMAIL and HOYMILES_PASSWORD are required');
   }
 
   const hash = createHash('md5').update(config.hoymilesPassword).digest('hex');
-
-  console.log('[Hoymiles] Logging in...');
-
-  const res = await fetch(`${HOYMILES_API_BASE}/iam/pub/0/auth/login`, {
-    method: 'POST',
-    headers: API_HEADERS,
-    body: JSON.stringify({
-      user_name: config.hoymilesEmail,
-      password: hash,
-    }),
-    signal: AbortSignal.timeout(10000),
+  const res = await hoymilesPost(`${config.hoymilesApiUrl}/iam/pub/0/auth/login`, {
+    user_name: config.hoymilesEmail,
+    password: hash,
   });
 
   if (!res.ok) {
@@ -81,26 +98,14 @@ async function hoymilesLogin(): Promise<string> {
 }
 
 async function getCloudToken(): Promise<string> {
-  const now = Date.now();
-  // Renouveler le token s'il est expire ou n'existe pas
-  if (!cloudToken || (now - tokenTimestamp) >= TOKEN_TTL_MS) {
-    if (cloudToken) {
-      console.log('[Hoymiles] Token expired, renewing...');
-    }
-    // Invalider aussi le cache SD URI car il est lie a la session
-    for (const key of Object.keys(sdUriCache)) {
-      delete sdUriCache[key];
-    }
+  if (!cloudToken) {
     cloudToken = await hoymilesLogin();
-    tokenTimestamp = now;
   }
   return cloudToken;
 }
 
 function invalidateToken(): void {
   cloudToken = null;
-  tokenTimestamp = 0;
-  // Clear SD URI cache too since they may be tied to the session
   for (const key of Object.keys(sdUriCache)) {
     delete sdUriCache[key];
   }
@@ -110,33 +115,24 @@ function invalidateToken(): void {
 
 async function authenticatedPost(url: string, body: Record<string, unknown>, retry = true): Promise<Record<string, unknown>> {
   const token = await getCloudToken();
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { ...API_HEADERS, authorization: token },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
-  });
+  const res = await hoymilesPost(url, body, token);
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+    if ((res.status === 401 || res.status === 403) && retry) {
+      console.warn(`[Hoymiles] HTTP ${res.status}, retrying once with a fresh token`);
       invalidateToken();
-      // Retry once with fresh token
-      if (retry) {
-        console.warn(`[Hoymiles] HTTP ${res.status}, retrying with fresh token...`);
-        return authenticatedPost(url, body, false);
-      }
+      return authenticatedPost(url, body, false);
     }
     throw new Error(`Hoymiles API HTTP ${res.status} for ${url}`);
   }
 
   const json = await res.json() as Record<string, unknown>;
 
-  // Hoymiles API can return HTTP 200 with error status when token is expired
+  // The API answers HTTP 200 with an error status when the token has expired
   const status = String(json.status ?? '0');
   if (status !== '0' && status !== 'success') {
     if (retry) {
-      console.warn(`[Hoymiles] API status=${status} msg=${json.message}, retrying with fresh token...`);
+      console.warn(`[Hoymiles] API status=${status} msg=${json.message}, retrying once with a fresh token`);
       invalidateToken();
       return authenticatedPost(url, body, false);
     }
@@ -147,14 +143,11 @@ async function authenticatedPost(url: string, body: Record<string, unknown>, ret
 }
 
 async function getSdUri(stationId: string): Promise<string> {
-  const now = Date.now();
   const cached = sdUriCache[stationId];
-  if (cached && (now - cached.timestamp) < SD_URI_TTL_MS) {
-    return cached.uri;
-  }
+  if (cached) return cached;
 
   const json = await authenticatedPost(
-    `${HOYMILES_API_BASE}/pvm/api/0/station/get_sd_uri`,
+    `${config.hoymilesApiUrl}/pvm/api/0/station/get_sd_uri`,
     { sid: Number(stationId) },
   );
 
@@ -162,87 +155,66 @@ async function getSdUri(stationId: string): Promise<string> {
   const uri = data?.uri as string | undefined;
   if (!uri) {
     console.error('[Hoymiles] getSdUri response:', JSON.stringify(json));
-    throw new Error(`Hoymiles: pas de SD URI pour station ${stationId}`);
+    throw new Error(`Hoymiles: no SD URI for station ${stationId}`);
   }
 
   console.log(`[Hoymiles] SD URI for station ${stationId}: ${uri}`);
-  sdUriCache[stationId] = { uri, timestamp: now };
+  sdUriCache[stationId] = uri;
   return uri;
 }
 
-async function getStationData(sdUri: string): Promise<Record<string, unknown>> {
+async function getStationData(stationId: string): Promise<Record<string, unknown>> {
+  const sdUri = await getSdUri(stationId);
   const json = await authenticatedPost(sdUri, { data: { m: 0, t: 1 } });
-  // Response structure: { status: '0', message: 'success', data: { power: {...}, soc: ... } }
   const data = json.data as Record<string, unknown> | undefined;
 
   if (!data || !data.power) {
-    console.warn(`[Hoymiles] Empty station data from ${sdUri}, response:`, JSON.stringify(json).slice(0, 500));
-    // SD URI may have expired — clear cache to force refresh next time
-    for (const [key, cached] of Object.entries(sdUriCache)) {
-      if (cached.uri === sdUri) {
-        delete sdUriCache[key];
-        console.warn(`[Hoymiles] Cleared cached SD URI for station ${key}`);
-      }
-    }
+    delete sdUriCache[stationId];
+    throw new Error(`Hoymiles: empty station data, response: ${JSON.stringify(json).slice(0, 500)}`);
   }
 
-  return data ?? {};
+  return data;
 }
 
-// ── Daily yield (endpoint precis) ──
+async function getDailyYield(stationId: string, now: Date): Promise<number> {
+  const today = localDate(now);
 
-async function getDailyYield(stationId: string): Promise<number> {
-  const now = Date.now();
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-  if (cachedDailyYield && cachedDailyYield.date === today && (now - cachedDailyYield.timestamp) < DAILY_YIELD_TTL_MS) {
+  if (cachedDailyYield && cachedDailyYield.date === today && (now.getTime() - cachedDailyYield.timestamp) < DAILY_YIELD_TTL_MS) {
     return cachedDailyYield.value;
   }
 
   const json = await authenticatedPost(
-    `${HOYMILES_API_BASE}/pvm-data/api/0/station/data3/ceqc_a`,
+    `${config.hoymilesApiUrl}/pvm-data/api/0/station/data3/ceqc_a`,
     { sid: Number(stationId), date: today, mode: 1 },
   );
 
   const data = json.data as Record<string, unknown> | undefined;
   const pvEq = parseFloat(String(data?.pv_eq ?? '0'));
-  const yieldKwh = Math.round(pvEq / 10) / 100; // Wh → kWh avec 2 decimales
+  const yieldKwh = Math.round(pvEq / 10) / 100; // Wh → kWh, 2 decimals
 
-  cachedDailyYield = { value: yieldKwh, date: today, timestamp: now };
-  console.log(`[Hoymiles PV] Daily yield from API: ${yieldKwh} kWh (pv_eq=${pvEq} Wh)`);
-
+  cachedDailyYield = { value: yieldKwh, date: today, timestamp: now.getTime() };
   return yieldKwh;
 }
 
-// ── Real collectors ──
+// ── Real collector ──
 
-async function collectRealHoymiles(): Promise<HoymilesData> {
-  // Source unique : HOYMILES_STATION_ID (station PV classique)
-  // power.pv = puissance instantanee (W)
-  // pvr = yield total cumule (kWh) — PAS le daily !
-  // dly = yield journalier (Wh) — diviser par 1000 pour kWh
-  let pvPower = 0;
-  let pvYield = 0;
-  let totalYield = 0;
-
-  if (config.hoymilesStationId) {
-    const sdUri = await getSdUri(config.hoymilesStationId);
-    const data = await getStationData(sdUri);
-    const power = data.power as Record<string, number> | undefined;
-    pvPower = power?.pv ?? 0;
-    totalYield = power?.pvr ?? 0; // Cumul total en kWh
-
-    // Daily yield via endpoint dedie (dly du real-time est faux)
-    pvYield = await getDailyYield(config.hoymilesStationId);
+async function collectRealHoymiles(now: Date): Promise<HoymilesData> {
+  if (!config.hoymilesStationId) {
+    throw new Error('HOYMILES_STATION_ID is required');
   }
 
-  pvStatus = { ...pvStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0, lastError: null };
+  // power.pv = instantaneous W, power.pvr = lifetime kWh; the realtime "dly" is wrong, hence getDailyYield
+  const data = await getStationData(config.hoymilesStationId);
+  const power = data.power as Record<string, number> | undefined;
+  const pvPower = power?.pv ?? 0;
+  const totalYield = power?.pvr ?? 0;
+  const todayYield = await getDailyYield(config.hoymilesStationId, now);
 
-  console.log(`[Hoymiles PV] pv=${pvPower}W dailyYield=${pvYield}kWh totalYield=${totalYield}kWh`);
+  console.log(`[Hoymiles PV] pv=${pvPower}W dailyYield=${todayYield}kWh totalYield=${totalYield}kWh`);
 
   return {
     powerNow: Math.round(pvPower),
-    todayYield: pvYield,
+    todayYield,
     totalYield,
     panels: [],
     inverterTemp: 0,
@@ -250,55 +222,93 @@ async function collectRealHoymiles(): Promise<HoymilesData> {
   };
 }
 
-// ── Exported functions ──
+function collectDemoHoymiles(): HoymilesData {
+  const solarFactor = getSolarFactor();
+  const totalPower = Math.round(randomVariation(DEMO_PEAK_POWER_W * solarFactor, 10));
+  const panelCount = 6;
 
-export async function collectHoymiles(): Promise<HoymilesData> {
-  if (config.demoMode) {
-    const solarFactor = getSolarFactor();
-    const maxPower = 3000;
-    const totalPower = Math.round(randomVariation(maxPower * solarFactor, 10));
-    const panelCount = 6;
-
-    const panels: PVPanel[] = Array.from({ length: panelCount }, (_, i) => {
-      const panelPower = Math.max(0, Math.round(randomVariation(totalPower / panelCount, 8)));
-      const voltage = solarFactor > 0 ? randomVariation(37, 3) : 0;
-      const current = voltage > 0 ? panelPower / voltage : 0;
-      return {
-        id: `PV-${i + 1}`,
-        power: panelPower,
-        voltage: Math.round(voltage * 10) / 10,
-        current: Math.round(current * 100) / 100,
-        temperature: Math.round(randomVariation(35 + solarFactor * 20, 10)),
-        yieldToday: Math.round(todayYield / panelCount * 1000) / 1000,
-      };
-    });
-
-    const actualTotal = panels.reduce((sum, p) => sum + p.power, 0);
-    todayYield += (actualTotal * 2) / 3600000;
-
-    pvStatus = { ...pvStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0 };
-
+  const panels: PVPanel[] = Array.from({ length: panelCount }, (_, i) => {
+    const panelPower = Math.max(0, Math.round(randomVariation(totalPower / panelCount, 8)));
+    const voltage = solarFactor > 0 ? randomVariation(37, 3) : 0;
+    const current = voltage > 0 ? panelPower / voltage : 0;
     return {
-      powerNow: actualTotal,
-      todayYield: Math.round(todayYield * 100) / 100,
-      totalYield: totalYield + todayYield,
-      panels,
-      inverterTemp: Math.round(randomVariation(40 + solarFactor * 15, 5)),
-      status: actualTotal > 10 ? 'producing' : 'idle',
+      id: `PV-${i + 1}`,
+      power: panelPower,
+      voltage: Math.round(voltage * 10) / 10,
+      current: Math.round(current * 100) / 100,
+      temperature: Math.round(randomVariation(35 + solarFactor * 20, 10)),
+      yieldToday: Math.round(demoTodayYield / panelCount * 1000) / 1000,
     };
+  });
+
+  const actualTotal = panels.reduce((sum, p) => sum + p.power, 0);
+  demoTodayYield += (actualTotal * 2) / 3600000;
+
+  pvStatus = { ...pvStatus, connected: true, lastUpdate: new Date().toISOString(), errorCount: 0 };
+
+  return {
+    powerNow: actualTotal,
+    todayYield: Math.round(demoTodayYield * 100) / 100,
+    totalYield: demoTotalYield + demoTodayYield,
+    panels,
+    inverterTemp: Math.round(randomVariation(40 + solarFactor * 15, 5)),
+    status: actualTotal > 10 ? 'producing' : 'idle',
+  };
+}
+
+// ── Scheduling: daylight only, every 5 min, exponential backoff on failure ──
+
+let lastPv: HoymilesData | null = null;
+let lastPvDate = '';
+let nextPollAt = 0;
+let consecutiveFailures = 0;
+
+export async function collectHoymiles(now: Date): Promise<HoymilesData> {
+  if (config.demoMode) return collectDemoHoymiles();
+
+  const today = localDate(now);
+  if (today !== lastPvDate) {
+    lastPv = null;
+    lastPvDate = today;
+  }
+
+  if (!isDaylight(now, config.siteLatitude, config.siteLongitude)) {
+    return { ...(lastPv ?? defaultPv), powerNow: 0, status: 'idle' };
+  }
+
+  if (now.getTime() < nextPollAt) {
+    return lastPv ?? defaultPv;
   }
 
   try {
-    return await collectRealHoymiles();
+    lastPv = await collectRealHoymiles(now);
+    consecutiveFailures = 0;
+    nextPollAt = nextPollAfterSuccess(now.getTime());
+    pvStatus = {
+      ...pvStatus,
+      connected: true,
+      lastUpdate: now.toISOString(),
+      errorCount: 0,
+      lastError: null,
+      nextAttempt: new Date(nextPollAt).toISOString(),
+    };
   } catch (error) {
+    consecutiveFailures++;
+    const delay = backoffDelay(consecutiveFailures);
+    nextPollAt = now.getTime() + delay;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Hoymiles] ${message} — backoff ${delay / 60_000} min (failure #${consecutiveFailures})`);
     pvStatus = {
       ...pvStatus,
       connected: false,
-      errorCount: pvStatus.errorCount + 1,
-      lastError: error instanceof Error ? error.message : String(error),
+      errorCount: consecutiveFailures,
+      lastError: message,
+      nextAttempt: new Date(nextPollAt).toISOString(),
     };
-    throw error;
+    if (lastPv) lastPv = { ...lastPv, status: 'offline' };
   }
+
+  return lastPv ?? defaultPv;
 }
 
 export function getHoymilesStatus(): CollectorStatus {
