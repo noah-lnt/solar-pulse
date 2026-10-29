@@ -18,11 +18,8 @@ export const config = {
 
   // Shelly
   shellyIp: process.env.SHELLY_IP || '192.168.1.XX',
-  shellyPollInterval: parseInt(process.env.SHELLY_POLL_INTERVAL_MS || '2000', 10),
 
   // Hoymiles
-  hoymilesDtuIp: process.env.HOYMILES_DTU_IP || '192.168.1.XX',
-  hoymilesPollInterval: parseInt(process.env.HOYMILES_POLL_INTERVAL_MS || '3000', 10),
   hoymilesEmail: process.env.HOYMILES_EMAIL || '',
   hoymilesPassword: process.env.HOYMILES_PASSWORD || '',
   hoymilesStationId: process.env.HOYMILES_STATION_ID || '',
@@ -30,8 +27,6 @@ export const config = {
   // Victron
   victronVenusIp: process.env.VICTRON_VENUS_IP || '192.168.1.XX',
   victronMqttPort: parseInt(process.env.VICTRON_MQTT_PORT || '1883', 10),
-  victronVrmToken: process.env.VICTRON_VRM_TOKEN || '',
-  victronVrmInstallationId: process.env.VICTRON_VRM_INSTALLATION_ID || '',
 
   // WebSocket
   wsHeartbeatMs: parseInt(process.env.WS_HEARTBEAT_MS || '5000', 10),
