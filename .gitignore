@@ -4,3 +4,4 @@ dist/
 pgdata/
 *.log
 .DS_Store
+*.tsbuildinfo
