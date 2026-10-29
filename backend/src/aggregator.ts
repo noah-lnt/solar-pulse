@@ -3,6 +3,7 @@ import { collectHoymiles } from './collectors/hoymiles.collector';
 import { collectShelly } from './collectors/shelly.collector';
 import { collectVictron, collectLiFePO4 } from './collectors/victron.collector';
 import { pool } from './db';
+import { computeEnergyFlows } from './energy';
 
 const MAX_MEMORY_POINTS = 1440; // 24h in memory for fast access
 const history: HistoryPoint[] = [];
@@ -121,13 +122,7 @@ export async function aggregate(): Promise<SystemState> {
   const totalBatteryPower = lifepoOnline ? lifepoDiy.power : 0;
   const totalBatterySoc = lifepoOnline ? lifepoDiy.soc : 0;
 
-  const consumption = pv.powerNow + totalBatteryPower + grid.totalPower;
-  const selfConsumptionPercent = pv.powerNow > 0
-    ? Math.min(100, Math.round((Math.min(pv.powerNow, Math.max(0, consumption)) / pv.powerNow) * 100))
-    : 0;
-  const autarkyPercent = consumption > 0
-    ? Math.min(100, Math.round(((consumption - Math.max(0, grid.totalPower)) / consumption) * 100))
-    : 0;
+  const flows = computeEnergyFlows(pv.powerNow, grid.totalPower, victron.mode);
 
   const state: SystemState = {
     timestamp: new Date().toISOString(),
@@ -136,9 +131,7 @@ export async function aggregate(): Promise<SystemState> {
     victron,
     grid,
     computed: {
-      selfConsumptionPercent,
-      autarkyPercent,
-      netGridPower: grid.totalPower,
+      ...flows,
       totalBatteryPower: Math.round(totalBatteryPower),
       totalBatterySoc: Math.round(totalBatterySoc * 10) / 10,
     },
@@ -155,7 +148,7 @@ export async function aggregate(): Promise<SystemState> {
       pvPower: pv.powerNow,
       gridPower: grid.totalPower,
       batteryPower: totalBatteryPower,
-      consumption: Math.round(consumption),
+      consumption: flows.consumption,
       gridImportWh: grid.totalImportWh,
       gridExportWh: grid.totalExportWh,
       lifepeSoc: lifepoDiy.soc,

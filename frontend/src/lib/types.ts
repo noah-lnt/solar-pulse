@@ -78,9 +78,11 @@ export interface SystemState {
   victron: VictronData;
   grid: ShellyData;
   computed: {
+    consumption: number;
+    linkyPower: number;
+    consumptionSource: 'linky' | 'solar_battery';
     selfConsumptionPercent: number;
     autarkyPercent: number;
-    netGridPower: number;
     totalBatteryPower: number;
     totalBatterySoc: number;
   };
@@ -105,8 +107,9 @@ export interface HistoryPoint {
 export interface DailySummary {
   date: string;
   pvYieldKwh: number;
-  gridImportKwh: number;
-  gridExportKwh: number;
+  consumptionKwh: number;
+  linkyImportKwh: number;
+  linkyExportKwh: number;
   chargeKwh: number;
   dischargeKwh: number;
 }

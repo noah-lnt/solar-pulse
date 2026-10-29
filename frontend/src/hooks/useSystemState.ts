@@ -38,7 +38,7 @@ export function useSystemState(lastWsState: SystemState | null) {
           pvPower: lastWsState.pv.powerNow,
           gridPower: lastWsState.grid.totalPower,
           batteryPower: lastWsState.computed.totalBatteryPower,
-          consumption: lastWsState.pv.powerNow + lastWsState.computed.totalBatteryPower + lastWsState.grid.totalPower,
+          consumption: lastWsState.computed.consumption,
           gridImportWh: lastWsState.grid.totalImportWh,
           gridExportWh: lastWsState.grid.totalExportWh,
           lifepeSoc: lastWsState.lifepoDiy.soc,

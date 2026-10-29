@@ -54,6 +54,17 @@ Hoymiles blocks IPs that poll too often, so its collector is deliberately slow:
 
 When another collector fails, the dashboard keeps its last known values.
 
+## Consumption and the Linky
+
+The PV feeds the house side of the Shelly, so the house consumption is **PV + Shelly** in both Victron modes. What changes is where the energy comes from:
+
+| Victron | Shelly measures | House is supplied by | Paid (Linky) |
+|---|---|---|---|
+| OFF | the Linky | Linky + PV | Shelly import |
+| ON (island) | the Victron line | PV + battery | nothing |
+
+The daily table counts Linky import/export from the Shelly energy counters, only over the minutes where the Victron was OFF. Self-consumption = share of the PV not exported to the Linky; self-sufficiency = share of the consumption not imported from the Linky.
+
 ## Configuration (`.env`)
 
 | Variable | Meaning |
