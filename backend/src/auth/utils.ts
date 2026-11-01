@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { REMEMBER_SECONDS, SESSION_SECONDS } from './session';
 
 const SALT_ROUNDS = 12;
 
@@ -12,9 +13,9 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-export function generateToken(userId: number, email: string): string {
+export function generateToken(userId: number, email: string, remember: boolean): string {
   return jwt.sign({ userId, email }, config.jwtSecret, {
-    expiresIn: 86400, // 24 hours in seconds
+    expiresIn: remember ? REMEMBER_SECONDS : SESSION_SECONDS,
   });
 }
 

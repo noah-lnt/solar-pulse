@@ -5,6 +5,7 @@ import { pool } from '../db';
 import { config } from '../config';
 import { hashPassword, comparePassword, generateToken } from './utils';
 import { AuthRequest } from './middleware';
+import { setSessionCookie, clearSessionCookie } from './session';
 
 const router = Router();
 
@@ -71,9 +72,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     );
 
     const user = result.rows[0];
-    const token = generateToken(user.id, user.email);
+    setSessionCookie(res, generateToken(user.id, user.email, true), true);
 
-    res.status(201).json({ user: { id: user.id, email: user.email }, token });
+    res.status(201).json({ user: { id: user.id, email: user.email } });
   } catch (error) {
     console.error('[Auth] Register error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -82,7 +83,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, remember } = req.body;
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email et mot de passe requis' });
@@ -102,12 +103,18 @@ router.post('/login', loginLimiter, async (req, res) => {
       return;
     }
 
-    const token = generateToken(user.id, user.email);
-    res.json({ user: { id: user.id, email: user.email }, token });
+    const stay = remember === true;
+    setSessionCookie(res, generateToken(user.id, user.email, stay), stay);
+    res.json({ user: { id: user.id, email: user.email } });
   } catch (error) {
     console.error('[Auth] Login error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
+});
+
+router.post('/logout', (_req, res) => {
+  clearSessionCookie(res);
+  res.json({ success: true });
 });
 
 router.get('/me', (req: AuthRequest, res) => {

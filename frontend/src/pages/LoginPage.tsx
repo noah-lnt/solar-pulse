@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sun } from 'lucide-react';
 
 interface LoginPageProps {
-  onLogin: (email: string, password: string) => Promise<void>;
+  onLogin: (email: string, password: string, remember: boolean) => Promise<void>;
   onRegister: (email: string, password: string, secret: string) => Promise<void>;
   loading: boolean;
   error: string | null;
@@ -17,6 +17,7 @@ export function LoginPage({ onLogin, onRegister, loading, error }: LoginPageProp
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secret, setSecret] = useState('');
+  const [remember, setRemember] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +25,7 @@ export function LoginPage({ onLogin, onRegister, loading, error }: LoginPageProp
     if (isRegister) {
       await onRegister(email, password, secret);
     } else {
-      await onLogin(email, password);
+      await onLogin(email, password, remember);
     }
   };
 
@@ -70,6 +71,18 @@ export function LoginPage({ onLogin, onRegister, loading, error }: LoginPageProp
                 minLength={8}
               />
             </div>
+            {!isRegister && (
+              <div className="flex items-center gap-2">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-amber-500"
+                />
+                <Label htmlFor="remember" className="font-normal">Rester connecte (30 jours)</Label>
+              </div>
+            )}
             {isRegister && (
               <div className="space-y-2">
                 <Label htmlFor="secret">Code d'inscription</Label>

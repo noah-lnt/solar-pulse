@@ -3,6 +3,7 @@ import { IncomingMessage, Server } from 'http';
 import { parse } from 'url';
 import { config } from './config';
 import { verifyToken } from './auth/utils';
+import { readSession } from './auth/session';
 import { SystemState } from './collectors/types';
 
 interface AuthenticatedSocket extends WebSocket {
@@ -12,18 +13,34 @@ interface AuthenticatedSocket extends WebSocket {
 
 let wss: WebSocketServer;
 
+function originHost(origin: string): string | null {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
+
 export function setupWebSocket(server: Server): void {
   wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (request: IncomingMessage, socket, head) => {
-    const { pathname, query } = parse(request.url || '', true);
+    const { pathname } = parse(request.url || '');
 
     if (pathname !== '/ws') {
       socket.destroy();
       return;
     }
 
-    const token = query.token as string;
+    // Cross-site WebSocket hijacking: the session cookie must not open a socket for another site
+    const origin = request.headers.origin;
+    if (origin && originHost(origin) !== request.headers.host) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    const token = readSession(request.headers.cookie);
     if (!token) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();

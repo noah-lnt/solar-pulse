@@ -3,6 +3,7 @@
 ## 1.1.0 — Unreleased
 
 ### Added
+- "Rester connecte (30 jours)" checkbox on the login page; without it the session ends when the browser closes.
 - Consumption source on the overview: "Linky (payant)" when the Victron is OFF, "Solaire + batterie" when it is ON.
 - Daily consumption column in the history table.
 
@@ -22,6 +23,7 @@
 - Days in the history table no longer shift by one when the backend runs on Paris time.
 
 ### Security
+- The session lives in an httpOnly, `SameSite=Strict` cookie instead of `sessionStorage`, and no longer appears in the WebSocket URL; the WebSocket refuses other origins. Everyone logs in once more after this update.
 - `JWT_SECRET`, `DATABASE_URL` and `POSTGRES_PASSWORD` have no default any more: the stack refuses to start without them.
 - Login is limited to 10 failed attempts per 15 minutes per IP, registration to 5 attempts per hour.
 - CORS is no longer enabled (the frontend is served from the same origin).

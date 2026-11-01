@@ -1,16 +1,20 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as auth from '@/lib/auth';
 
 export function useAuth() {
-  const [isLoggedIn, setIsLoggedIn] = useState(auth.isAuthenticated());
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = useCallback(async (email: string, password: string) => {
+  useEffect(() => {
+    auth.checkAuth().then(setIsLoggedIn);
+  }, []);
+
+  const handleLogin = useCallback(async (email: string, password: string, remember: boolean) => {
     setLoading(true);
     setError(null);
     try {
-      await auth.login(email, password);
+      await auth.login(email, password, remember);
       setIsLoggedIn(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion');
@@ -32,8 +36,8 @@ export function useAuth() {
     }
   }, []);
 
-  const handleLogout = useCallback(() => {
-    auth.logout();
+  const handleLogout = useCallback(async () => {
+    await auth.logout();
     setIsLoggedIn(false);
   }, []);
 
