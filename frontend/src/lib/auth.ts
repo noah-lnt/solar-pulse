@@ -19,6 +19,19 @@ export function isAuthenticated(): boolean {
   return token !== null;
 }
 
+// A 401 means the 24 h token expired: drop it and reload, which shows the login page.
+export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (res.status === 401) {
+    setToken(null);
+    window.location.reload();
+  }
+  return res;
+}
+
 export async function login(email: string, password: string): Promise<{ id: number; email: string }> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',

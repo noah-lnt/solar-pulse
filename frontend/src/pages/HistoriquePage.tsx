@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { getToken } from '@/lib/auth';
+import { authFetch } from '@/lib/auth';
 import type { DailySummary, DailyHistoryResponse } from '@/lib/types';
 import { computeRates } from '@/lib/energy';
 
@@ -32,10 +32,7 @@ export function HistoriquePage() {
   const fetchData = useCallback(async (p: string) => {
     setLoading(true);
     try {
-      const token = getToken();
-      const res = await fetch(`/api/history/daily?period=${p}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await authFetch(`/api/history/daily?period=${p}`);
       if (res.ok) {
         const json: DailyHistoryResponse = await res.json();
         setData(json);

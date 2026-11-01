@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { getToken } from '@/lib/auth';
+import { getToken, authFetch } from '@/lib/auth';
 import type { SystemState } from '@/lib/types';
 
 type WsStatus = 'connected' | 'reconnecting' | 'disconnected';
@@ -26,14 +26,11 @@ export function useWebSocket(): UseWebSocketReturn {
 
   const startPolling = useCallback(() => {
     stopPolling();
-    const token = getToken();
-    if (!token) return;
+    if (!getToken()) return;
 
     const poll = async () => {
       try {
-        const res = await fetch('/api/status', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await authFetch('/api/status');
         if (res.ok) {
           const data = await res.json();
           setLastState(data);

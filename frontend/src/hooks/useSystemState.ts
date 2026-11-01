@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { SystemState, HistoryPoint } from '@/lib/types';
-import { getToken } from '@/lib/auth';
+import { authFetch } from '@/lib/auth';
 
 const MAX_HISTORY = 1440;
 
@@ -11,15 +11,15 @@ export function useSystemState(lastWsState: SystemState | null) {
 
   // Fetch initial history on mount
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
-    fetch('/api/history?range=24h', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.ok ? res.json() : [])
-      .then((data: HistoryPoint[]) => setHistory(data))
-      .catch(() => {});
+    const load = async () => {
+      try {
+        const res = await authFetch('/api/history?range=24h');
+        if (res.ok) setHistory(await res.json() as HistoryPoint[]);
+      } catch {
+        // keep the live points
+      }
+    };
+    load();
   }, []);
 
   // Update state from WS
@@ -53,12 +53,8 @@ export function useSystemState(lastWsState: SystemState | null) {
   }, [lastWsState, lastMinute]);
 
   const refresh = useCallback(async () => {
-    const token = getToken();
-    if (!token) return;
     try {
-      const res = await fetch('/api/status', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/status');
       if (res.ok) setState(await res.json());
     } catch {
       // ignore

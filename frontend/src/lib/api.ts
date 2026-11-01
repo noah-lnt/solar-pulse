@@ -1,14 +1,10 @@
-import { getToken } from './auth';
+import { authFetch } from './auth';
 
 export async function sendVictronMode(mode: string): Promise<{ success: boolean; error?: string }> {
-  const token = getToken();
   try {
-    const res = await fetch('/api/victron/mode', {
+    const res = await authFetch('/api/victron/mode', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
     });
     return await res.json();

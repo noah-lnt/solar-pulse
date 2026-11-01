@@ -16,6 +16,7 @@
 - Docker images run on Node 22; the backend container runs on `Europe/Paris` time.
 
 ### Fixed
+- When the 24 h login expires, the dashboard returns to the login page instead of staying on "Deconnecte" with no data.
 - Consumption no longer counts the battery twice while the Victron is ON.
 - The Hoymiles token is kept until Hoymiles rejects it, instead of a new login every 3 minutes.
 - Days in the history table no longer shift by one when the backend runs on Paris time.
