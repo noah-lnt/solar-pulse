@@ -1,91 +1,48 @@
-const TOKEN_KEY = 'solarpulse_token';
+// The session lives in an httpOnly cookie set by the backend: JavaScript never sees the token.
 
-let token: string | null = sessionStorage.getItem(TOKEN_KEY);
-
-export function getToken(): string | null {
-  return token;
-}
-
-export function setToken(t: string | null): void {
-  token = t;
-  if (t) {
-    sessionStorage.setItem(TOKEN_KEY, t);
-  } else {
-    sessionStorage.removeItem(TOKEN_KEY);
-  }
-}
-
-export function isAuthenticated(): boolean {
-  return token !== null;
-}
-
-// A 401 means the 24 h token expired: drop it and reload, which shows the login page.
+// A 401 means the session expired: reload, which runs checkAuth and shows the login page.
 export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
+  const res = await fetch(url, init);
   if (res.status === 401) {
-    setToken(null);
     window.location.reload();
   }
   return res;
 }
 
-export async function login(email: string, password: string): Promise<{ id: number; email: string }> {
-  const res = await fetch('/api/auth/login', {
+async function postJson(url: string, body: unknown, fallbackError: string): Promise<{ id: number; email: string }> {
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
-
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || 'Erreur de connexion');
-  }
-
   const data = await res.json();
-  setToken(data.token);
+  if (!res.ok) {
+    throw new Error(data.error || fallbackError);
+  }
   return data.user;
 }
 
-export async function register(email: string, password: string, secret: string): Promise<{ id: number; email: string }> {
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ email, password, secret }),
-  });
+export function login(email: string, password: string, remember: boolean) {
+  return postJson('/api/auth/login', { email, password, remember }, 'Erreur de connexion');
+}
 
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || 'Erreur d\'inscription');
-  }
-
-  const data = await res.json();
-  setToken(data.token);
-  return data.user;
+export function register(email: string, password: string, secret: string) {
+  return postJson('/api/auth/register', { email, password, secret }, 'Erreur d\'inscription');
 }
 
 export async function checkAuth(): Promise<boolean> {
-  if (!token) return false;
-
   try {
-    const res = await fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      setToken(null);
-      return false;
-    }
-    return true;
+    const res = await fetch('/api/auth/me');
+    return res.ok;
   } catch {
     return false;
   }
 }
 
-export function logout(): void {
-  setToken(null);
+export async function logout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch {
+    // the cookie stays until it expires
+  }
 }

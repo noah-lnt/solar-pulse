@@ -119,14 +119,15 @@ The stack runs on the product host, which is on the same LAN as the Shelly and t
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/auth/login` | POST | Log in (email, password); 10 failed attempts per 15 min per IP |
-| `/api/auth/register` | POST | Create the first account (`secret` = `REGISTER_SECRET`); 5 attempts per hour per IP |
+| `/api/auth/login` | POST | Log in (`email`, `password`, `remember`); sets the `solarpulse_session` cookie (httpOnly, 30 days with `remember`, else until the browser closes); 10 failed attempts per 15 min per IP |
+| `/api/auth/logout` | POST | Clears the session cookie |
+| `/api/auth/register` | POST | Create the first account (`secret` = `REGISTER_SECRET`), logged in for 30 days; 5 attempts per hour per IP |
 | `/api/status` | GET | Full system state |
 | `/api/history?range=24h` | GET | Per-minute history |
 | `/api/history/daily?period=7d\|30d\|6m` | GET | Daily totals |
 | `/api/health` | GET | Collector status, including Hoymiles `nextAttempt` |
 | `/api/victron/mode` | POST | Set the Victron mode (on/off/charger/inverter) |
-| `/ws` | WS | Real-time `SystemState` every 10 s |
+| `/ws` | WS | Real-time `SystemState` every 10 s; authenticated by the session cookie, same origin only |
 
 ## License
 

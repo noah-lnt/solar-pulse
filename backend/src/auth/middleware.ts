@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from './utils';
+import { readSession } from './session';
 
 export interface AuthRequest extends Request {
   user?: { userId: number; email: string };
 }
 
-const PUBLIC_PATHS = ['/api/auth/login', '/api/health'];
+const PUBLIC_PATHS = ['/api/auth/login', '/api/auth/logout', '/api/health'];
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
   if (PUBLIC_PATHS.includes(req.path)) {
@@ -19,14 +20,13 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     return;
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Token requis' });
+  const token = readSession(req.headers.cookie);
+  if (!token) {
+    res.status(401).json({ error: 'Non authentifie' });
     return;
   }
 
   try {
-    const token = authHeader.slice(7);
     req.user = verifyToken(token);
     next();
   } catch {
