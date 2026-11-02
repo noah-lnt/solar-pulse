@@ -17,6 +17,7 @@
 - Docker images run on Node 22; the backend container runs on `Europe/Paris` time.
 
 ### Fixed
+- The "Echanges reseau (24h)" chart is readable in both themes: 5-minute import/export curves instead of up to 1,440 hairline bars, round axis values, theme colors, and a tooltip that says "Depuis/Vers Victron" while the Victron is ON. The PV chart uses the same theme colors and tooltip.
 - When the WARP client stops (seen overnight after a host network change), its container restarts itself after about 2 minutes instead of staying unhealthy, and Hoymiles connection errors now log their cause.
 - When the 24 h login expires, the dashboard returns to the login page instead of staying on "Deconnecte" with no data.
 - Consumption no longer counts the battery twice while the Victron is ON.
