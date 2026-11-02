@@ -51,7 +51,7 @@ Hoymiles blocks IPs that poll too often, so its collector is deliberately slow:
 - **One login per session.** The token is kept until Hoymiles rejects it; a rejection triggers one retry with a fresh token.
 - **Two calls per poll.** Hoymiles serves the live data from a short-lived URL (it expires ~2.5 min after issue), so each poll fetches a fresh one, then the data; the daily yield adds one call every 15 min.
 - **Backoff.** After a failure the collector waits 30 min, then 1 h, 2 h, 4 h, up to 6 h, and makes no call meanwhile. `/api/health` shows `nextAttempt`.
-- **Separate egress IP.** In Docker, Hoymiles calls go through the `warp` service (`HOYMILES_PROXY_URL=http://warp:1080`). If the proxy is down, the call fails and backs off; it never falls back to a direct call.
+- **Separate egress IP.** In Docker, Hoymiles calls go through the `warp` service (`HOYMILES_PROXY_URL=http://warp:1080`). If the proxy is down, the call fails and backs off; it never falls back to a direct call. When WARP stops working (4 failed health checks, about 2 min), its container restarts itself (`warp/healthcheck.sh`): Docker alone never restarts an unhealthy container.
 
 When another collector fails, the dashboard keeps its last known values.
 
