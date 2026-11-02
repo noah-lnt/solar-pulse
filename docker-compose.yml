@@ -36,6 +36,18 @@ services:
       WARP_SLEEP: 2
     volumes:
       - ./warp-data:/var/lib/cloudflare-warp
+      - type: bind
+        source: ./warp/healthcheck.sh
+        target: /usr/local/bin/warp-healthcheck
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/warp-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     networks:
       - solarpulse
     deploy:

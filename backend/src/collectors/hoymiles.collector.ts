@@ -287,7 +287,8 @@ export async function collectHoymiles(now: Date): Promise<HoymilesData> {
     consecutiveFailures++;
     const delay = backoffDelay(consecutiveFailures);
     nextPollAt = now.getTime() + delay;
-    const message = error instanceof Error ? error.message : String(error);
+    const cause = error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : '';
+    const message = (error instanceof Error ? error.message : String(error)) + cause;
     console.error(`[Hoymiles] ${message} — backoff ${delay / 60_000} min (failure #${consecutiveFailures})`);
     pvStatus = {
       ...pvStatus,
