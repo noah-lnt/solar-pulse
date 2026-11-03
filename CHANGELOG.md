@@ -6,6 +6,7 @@
 - "Rester connecte (30 jours)" checkbox on the login page; without it the session ends when the browser closes.
 - Consumption source on the overview: "Linky (payant)" when the Victron is OFF, "Solaire + batterie" when it is ON.
 - Daily consumption column in the history table.
+- Average consumption columns in the history table: over the day, on the Linky (Victron OFF), on the Victron (ON), at night and in daylight (site sunrise to sunset), each with its energy and duration.
 
 ### Changed
 - Consumption is PV + Shelly in both Victron modes, and only Victron-OFF minutes count as Linky import/export; self-consumption and self-sufficiency are computed from those Linky figures. Past days are recomputed from the stored Victron mode.

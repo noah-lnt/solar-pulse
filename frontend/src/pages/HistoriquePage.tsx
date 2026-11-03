@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/auth';
-import type { DailySummary, DailyHistoryResponse } from '@/lib/types';
+import type { ConsumptionSlice, DailySummary, DailyHistoryResponse } from '@/lib/types';
 import { computeRates } from '@/lib/energy';
 
 const PERIODS = [
@@ -10,6 +10,14 @@ const PERIODS = [
   { value: '30d', label: '30 jours' },
   { value: '6m', label: '6 mois' },
 ] as const;
+
+const SLICE_COLUMNS: { key: keyof DailySummary['consumptionSlices']; label: string; title: string }[] = [
+  { key: 'total', label: 'Moy. 24 h', title: 'Consommation moyenne sur toutes les minutes enregistrees' },
+  { key: 'linky', label: 'Moy. Linky', title: 'Victron OFF : la maison est alimentee par le Linky' },
+  { key: 'victron', label: 'Moy. Victron', title: 'Victron ON : la maison est en ilot (solaire + batterie)' },
+  { key: 'night', label: 'Moy. nuit', title: 'Du coucher au lever du soleil' },
+  { key: 'day', label: 'Moy. jour', title: 'Du lever au coucher du soleil' },
+];
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -20,6 +28,27 @@ function Cell({ value, unit = 'kWh' }: { value: number; unit?: string }) {
   return (
     <td className="px-3 py-2 text-right tabular-nums">
       {value.toFixed(1)} <span className="text-muted-foreground text-[10px]">{unit}</span>
+    </td>
+  );
+}
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, '0')}`;
+}
+
+function SliceCell({ slice }: { slice: ConsumptionSlice }) {
+  if (slice.minutes === 0) {
+    return <td className="px-3 py-2 text-right text-muted-foreground">—</td>;
+  }
+  return (
+    <td className="px-3 py-2 text-right tabular-nums">
+      {slice.avgW} <span className="text-muted-foreground text-[10px]">W</span>
+      <div className="whitespace-nowrap text-[10px] font-normal text-muted-foreground">
+        {slice.kwh.toFixed(1)} kWh · {formatDuration(slice.minutes)}
+      </div>
     </td>
   );
 }
@@ -92,6 +121,11 @@ export function HistoriquePage() {
                     <th className="px-3 py-2 text-right font-medium">Linky export</th>
                     <th className="px-3 py-2 text-right font-medium">Autoconso.</th>
                     <th className="px-3 py-2 text-right font-medium">Autosuff.</th>
+                    {SLICE_COLUMNS.map((c) => (
+                      <th key={c.key} title={c.title} className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                        {c.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -108,6 +142,9 @@ export function HistoriquePage() {
                         <Cell value={day.linkyExportKwh} />
                         <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{autoconso}%</td>
                         <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-400">{autosuff}%</td>
+                        {SLICE_COLUMNS.map((c) => (
+                          <SliceCell key={c.key} slice={day.consumptionSlices[c.key]} />
+                        ))}
                       </tr>
                     );
                   })}
@@ -126,6 +163,9 @@ export function HistoriquePage() {
                         <Cell value={data.averages.linkyExportKwh} />
                         <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{autoconso}%</td>
                         <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-400">{autosuff}%</td>
+                        {SLICE_COLUMNS.map((c) => (
+                          <SliceCell key={c.key} slice={data.averages.consumptionSlices[c.key]} />
+                        ))}
                       </tr>
                     );
                   })()}

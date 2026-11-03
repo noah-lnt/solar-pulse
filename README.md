@@ -66,6 +66,8 @@ The PV feeds the house side of the Shelly, so the house consumption is **PV + Sh
 
 The daily table counts Linky import/export from the Shelly energy counters, only over the minutes where the Victron was OFF. Self-consumption = share of the PV not exported to the Linky; self-sufficiency = share of the consumption not imported from the Linky.
 
+Its "Moy." columns give the average consumption power over the recorded minutes of the day (24 h), of the Victron-OFF minutes (Linky), of the Victron-ON minutes (Victron), and of the minutes before sunrise or after sunset (night) or between them (day), each with its energy and duration. Sunrise and sunset come from `SITE_LATITUDE` / `SITE_LONGITUDE`, as for Hoymiles. On the "Moyenne / jour" row the power is weighted by duration over the whole period; energy and duration are per-day averages.
+
 ## Configuration (`.env`)
 
 | Variable | Meaning |

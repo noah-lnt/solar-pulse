@@ -104,6 +104,12 @@ export interface HistoryPoint {
   victronMode: string;
 }
 
+export interface ConsumptionSlice {
+  avgW: number;
+  kwh: number;
+  minutes: number;
+}
+
 export interface DailySummary {
   date: string;
   pvYieldKwh: number;
@@ -112,6 +118,7 @@ export interface DailySummary {
   linkyExportKwh: number;
   chargeKwh: number;
   dischargeKwh: number;
+  consumptionSlices: Record<'total' | 'linky' | 'victron' | 'night' | 'day', ConsumptionSlice>;
 }
 
 export interface DailyHistoryResponse {
