@@ -1,6 +1,4 @@
 > STATUS: ACTIVE
-@~/.claude/rules/nolan/org.md
-@~/.claude/conventions/docker-compose.md
 
 # SolarPulse — real-time dashboard for a home PV + Victron battery installation
 
